@@ -134,6 +134,99 @@ function findSafeSpot(bot, options = {}) {
   return best;
 }
 
+function findBed(bot, radius = 24) {
+  if (!bot || typeof bot.findBlock !== 'function') return null;
+  const maxDistance = Math.max(1, Math.min(64, Math.trunc(Number(radius) || 24)));
+  try {
+    return bot.findBlock({
+      maxDistance,
+      matching: (block) => /_bed$/.test(bareName(block && block.name)),
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+function findFlatSpot(bot, options = {}) {
+  const position = bot && bot.entity && bot.entity.position;
+  if (!position) return null;
+  const radius = Math.max(2, Math.min(16, Math.trunc(Number(options.searchRadius) || 6)));
+  const origin = {
+    x: Math.floor(position.x),
+    y: Math.floor(position.y),
+    z: Math.floor(position.z),
+  };
+  const directions = [[1, 0], [0, 1]];
+  let best = null;
+
+  for (let dy = -2; dy <= 2; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) {
+        const horizontal = Math.hypot(dx, dz);
+        if (horizontal < 1 || horizontal > radius) continue;
+        const x = origin.x + dx;
+        const y = origin.y + dy;
+        const z = origin.z + dz;
+        if (!isStandable(bot, x, y, z) || nearLava(bot, x, y, z)) continue;
+
+        for (const [sx, sz] of directions) {
+          const otherX = x + sx;
+          const otherZ = z + sz;
+          if (!isStandable(bot, otherX, y, otherZ) || nearLava(bot, otherX, y, otherZ)) continue;
+          const distance = Math.hypot(dx, dz);
+          if (!best || distance < best.distance) {
+            best = {
+              x,
+              y,
+              z,
+              other: { x: otherX, y, z: otherZ },
+              direction: { x: sx, z: sz },
+              distance,
+            };
+          }
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function findShelterNiche(bot, options = {}) {
+  const position = bot && bot.entity && bot.entity.position;
+  if (!position) return null;
+  const radius = Math.max(1, Math.min(16, Math.trunc(Number(options.searchRadius) || 8)));
+  const origin = {
+    x: Math.floor(position.x),
+    y: Math.floor(position.y),
+    z: Math.floor(position.z),
+  };
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  for (let distance = 1; distance <= radius; distance += 1) {
+    for (const [dx, dz] of directions) {
+      const outside = {
+        x: origin.x + dx * distance,
+        y: origin.y,
+        z: origin.z + dz * distance,
+      };
+      const wall = { x: outside.x + dx, y: outside.y, z: outside.z + dz };
+      if (!isStandable(bot, outside.x, outside.y, outside.z) ||
+        nearLava(bot, outside.x, outside.y, outside.z)) continue;
+      if (!isSolid(blockAt(bot, wall.x, wall.y, wall.z)) ||
+        !isSolid(blockAt(bot, wall.x, wall.y + 1, wall.z))) continue;
+      if (!isSolid(blockAt(bot, wall.x, wall.y - 1, wall.z))) continue;
+      if (nearLava(bot, wall.x, wall.y, wall.z)) continue;
+      return {
+        outside,
+        inside: wall,
+        direction: { x: dx, z: dz },
+        distance,
+      };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   blockAt,
   isLiquid,
@@ -143,5 +236,8 @@ module.exports = {
   isStandable,
   hasLavaNearby,
   findSafeSpot,
+  findBed,
+  findFlatSpot,
+  findShelterNiche,
   distance,
 };
