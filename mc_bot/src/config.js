@@ -37,6 +37,7 @@ const DEFAULTS = {
     // 第 1 阶段默认只观察、不接管旧 autonomy。验收 shadow 对比后再考虑关闭。
     shadowMode: true,
     tickMs: 100,
+    driveMs: 1000,
     arbiterMs: 500,
     logFile: 'brain-shadow.jsonl',
     agenda: {
@@ -67,7 +68,56 @@ const DEFAULTS = {
       offlineLogSec: 15,
       logRepeatSec: 30,
       silentSec: 30,
+      stuckProgressSec: 20,
       progressStaleSec: 45,
+    },
+    drives: {
+      hunger: {
+        triggerFood: 6,
+        lowHpTriggerFood: 18,
+        lowHp: 18,
+        satisfiedFood: 18,
+      },
+      health: {
+        triggerHpRatio: 0.3,
+        satisfiedHpRatio: 0.7,
+      },
+      night: {
+        preDuskTicks: 1200,
+      },
+    },
+    reflex: {
+      lowHp: {
+        hpRatio: 0.3,
+        threatRadius: 12,
+        clearHpRatio: 0.6,
+        clearThreatGoneMs: 5000,
+        fleeDistance: 18,
+        searchRadius: 16,
+        moveTimeoutMs: 8000,
+        cooldownMs: 3000,
+      },
+      hurt: {
+        activeMs: 2000,
+        counterMinHp: 12,
+        counterRadius: 4,
+        fleeDistance: 12,
+        searchRadius: 12,
+        moveTimeoutMs: 6000,
+        cooldownMs: 1500,
+      },
+      water: {
+        searchRadius: 12,
+        moveTimeoutMs: 6000,
+        cooldownMs: 2500,
+        surfaceJumpMs: 900,
+      },
+      lava: {
+        dangerRadius: 2,
+        searchRadius: 16,
+        moveTimeoutMs: 6000,
+        cooldownMs: 1000,
+      },
     },
     tasks: {
       idle: {

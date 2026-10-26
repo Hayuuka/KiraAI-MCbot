@@ -5,6 +5,7 @@ const follow = require('./follow');
 const inventory = require('./inventory');
 const mine = require('./mine');
 const guard = require('./guard');
+const world = require('./world');
 
 module.exports = {
   move,
@@ -12,6 +13,7 @@ module.exports = {
   inventory,
   mine,
   guard,
+  world,
   ...move,
   followTick: follow.followTick,
   startFollow: follow.startFollow,

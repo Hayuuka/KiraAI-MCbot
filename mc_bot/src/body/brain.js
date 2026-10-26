@@ -6,7 +6,10 @@ const path = require('path');
 const { DEFAULTS } = require('../config');
 const { perceive } = require('./perception');
 const { createAgenda } = require('./agenda');
-const { createInterrupts } = require('./interrupts');
+const { createDefaultInterrupts } = require('./interrupts');
+const { createDrives } = require('./drives');
+const { createArbiter } = require('./arbiter');
+const { createWatchdog } = require('./watchdog');
 const taskRegistry = require('../tasks');
 const { FAILURE_REASONS } = require('../tasks/base');
 
@@ -98,23 +101,42 @@ class Brain {
     this.perception = null;
     this._startedAt = null;
     this._lastArbiterAt = 0;
+    this._lastDriveAt = 0;
     this._lastTickAt = 0;
     this._offlineSince = null;
     this._offlineLogged = false;
     this._lastUnavailableLogAt = 0;
     this._wasInterrupted = false;
+    this._boundBot = null;
+    this._lastHurtAt = 0;
+    this._hurtSourceId = null;
 
     const recordDir = options.recordDir || path.resolve(__dirname, '..', '..', 'logs');
     const fallbackRecorder = createJsonlRecorder(recordDir, this.config.logFile, this.log);
     this.recordSink = typeof options.record === 'function' ? options.record : fallbackRecorder;
+
+    this.drives = options.drives || createDrives({
+      config: this.config.drives,
+      now: this.now,
+    });
+    this.watchdog = options.watchdog || createWatchdog({
+      config: this.config.watchdog,
+      log: this.log,
+    });
+    this.arbiter = options.arbiter || createArbiter({
+      config: this.config,
+      tasks: this.tasks,
+      drives: this.drives,
+    });
 
     this.agenda = options.agenda || createAgenda({
       maxDepth: this.config.agenda.maxDepth,
       defaultLeaseMs: this.config.agenda.defaultLeaseMs,
       onEvent: (event, payload) => this._onAgendaEvent(event, payload),
     });
-    this.interrupts = options.interrupts || createInterrupts({
+    this.interrupts = options.interrupts || createDefaultInterrupts({
       log: this.log,
+      reflexConfig: this.config.reflex,
       onEvent: (event, payload) => this._record(event, payload),
     });
   }
@@ -153,7 +175,6 @@ class Brain {
     const now = this.now();
     this.stats.ticks += 1;
     this.stats.lastTickAt = now;
-    const previousTickAt = this._lastTickAt || now;
     this._lastTickAt = now;
 
     const bot = this._getBot();
@@ -172,6 +193,12 @@ class Brain {
     }
     this._offlineSince = null;
     this._offlineLogged = false;
+    this._bindBotEvents(bot);
+
+    if (now - this._lastDriveAt >= this.config.driveMs) {
+      this._lastDriveAt = now;
+      this.drives.update(perception, now);
+    }
 
     const ctx = this._context(now, bot);
     const active = this.interrupts.evaluate(perception, ctx);
@@ -220,6 +247,15 @@ class Brain {
       this.agenda.dropTop(FAILURE_REASONS.INTERNAL_ERROR);
     }
 
+    try {
+      this.watchdog.check(ctx);
+    } catch (error) {
+      this._record('brain_error', {
+        stage: 'watchdog',
+        message: error && error.message ? error.message : String(error),
+      });
+    }
+
     return this.snapshot();
   }
 
@@ -237,7 +273,9 @@ class Brain {
       perception: this.perception,
       doing,
       agenda: this.agenda.snapshot(),
+      drives: this.drives.snapshot(),
       interrupts: this.interrupts.snapshot(),
+      watchdog: this.watchdog.snapshot({ agenda: this.agenda, now: this.now() }),
       stats: { ...this.stats },
     };
   }
@@ -259,89 +297,17 @@ class Brain {
       config: this.config,
       agenda: this.agenda,
       tasks: this.tasks,
+      drives: this.drives,
+      watchdog: this.watchdog,
+      lastHurtAt: this._lastHurtAt,
+      hurtSourceId: this._hurtSourceId,
       record: (event, payload) => this._record(event, payload),
     };
   }
 
-  _taskDefaults() {
-    const tasks = this.config.tasks;
-    return {
-      idle: { durationMs: tasks.idle.durationMs },
-      collectBlock: {
-        selector: tasks.collectBlock.selector,
-        count: tasks.collectBlock.count,
-        radius: tasks.collectBlock.radius,
-        maxMinutes: tasks.collectBlock.maxMinutes,
-      },
-    };
-  }
-
-  _strollTarget(perception) {
-    const position = perception && perception.self && perception.self.pos;
-    if (!position) return null;
-    const local = this.config.local;
-    const min = Math.max(1, Number(local.strollMinRadius) || 4);
-    const max = Math.max(min, Number(local.strollMaxRadius) || 12);
-    const distance = min + Math.random() * (max - min);
-    const angle = Math.random() * Math.PI * 2;
-    return {
-      x: Math.round(position.x + Math.cos(angle) * distance),
-      y: null,
-      z: Math.round(position.z + Math.sin(angle) * distance),
-    };
-  }
-
-  _chooseLocal(ctx) {
-    const local = this.config.local;
-    const perception = ctx.perception;
-    const idleArgs = { durationMs: this.config.tasks.idle.durationMs };
-    const idle = (reason) => ({
-      kind: 'idle',
-      args: idleArgs,
-      priority: local.idlePriority,
-      reason,
-    });
-
-    const hp = perception.self.hp;
-    if (hp != null && hp < local.minHpToWork) return idle('low_hp');
-    const dangerous = perception.threats.find((threat) => threat.dist <= local.dangerRadius);
-    if (dangerous) return idle('threat_nearby');
-    if (perception.world.isDay === false && !perception.world.underground && !local.workAtNight) {
-      return idle('night_without_stage1_shelter');
-    }
-
-    const candidates = this.tasks.available(ctx, this._taskDefaults());
-    const collect = candidates.find((candidate) => candidate.kind === 'collectBlock');
-    if (collect) {
-      return {
-        kind: collect.kind,
-        args: collect.args,
-        priority: local.collectPriority,
-        reason: 'nearby_resource',
-        note: collect.note,
-      };
-    }
-
-    const stroll = this._strollTarget(perception);
-    const GotoTask = this.tasks.get('goto');
-    const goto = stroll && GotoTask
-      ? GotoTask.feasible({ ...ctx, args: stroll })
-      : null;
-    if (goto) {
-      return {
-        kind: 'goto',
-        args: goto.args,
-        priority: local.strollPriority,
-        reason: 'daytime_stroll',
-        note: goto.note,
-      };
-    }
-    return idle('no_local_work');
-  }
-
   _arbitrate(ctx) {
     if (this.agenda.top()) return null;
-    const choice = this._chooseLocal(ctx);
+    const choice = this.arbiter.step(ctx);
     if (!choice) {
       this._record('local_no_decision', {});
       return null;
@@ -393,6 +359,37 @@ class Brain {
   _isStage1Equivalent(kind, legacyMode) {
     const covered = STAGE1_EQUIVALENTS[kind];
     return Boolean(covered && covered.has(legacyMode));
+  }
+
+  _bindBotEvents(bot) {
+    if (!bot || this._boundBot === bot || typeof bot.on !== 'function') return;
+    this._boundBot = bot;
+    const markHurt = (sourceId = null) => {
+      this._lastHurtAt = this.now();
+      this._hurtSourceId = sourceId;
+    };
+
+    let lastHp = Number(bot.health);
+    const hasThreat = () => Boolean(
+      this.perception && Array.isArray(this.perception.threats) && this.perception.threats.length
+    );
+    try {
+      bot.on('entityHurt', (entity) => {
+        if (entity === bot.entity && hasThreat()) markHurt();
+      });
+    } catch (_) {
+      // 某些 mineflayer 版本没有该事件。
+    }
+    try {
+      bot.on('health', () => {
+        const hp = Number(bot.health);
+        if (!Number.isFinite(hp)) return;
+        if (Number.isFinite(lastHp) && lastHp - hp >= 2 && hasThreat()) markHurt();
+        lastHp = hp;
+      });
+    } catch (_) {
+      // health 事件缺失时仍可由下一阶段的任务进度兜底。
+    }
   }
 
   _onAgendaEvent(event, payload) {

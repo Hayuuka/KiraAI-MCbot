@@ -295,12 +295,12 @@ class Task {
   }
 
   elapsedSec(ctx) {
-    if (!this.startedAt) return 0;
+    if (this.startedAt == null) return 0;
     return Math.max(0, (nowOf(ctx) - this.startedAt) / 1000);
   }
 
   progressStaleSec(ctx) {
-    if (!this._lastProgressAt) return 0;
+    if (this._lastProgressAt == null) return 0;
     return Math.max(0, (nowOf(ctx) - this._lastProgressAt) / 1000);
   }
 
