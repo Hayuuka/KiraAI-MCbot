@@ -1,0 +1,11 @@
+# 正版账号令牌，绝不能提交
+runtime/
+vendor/
+mc_bot/config.json
+mc_bot/config.local.json
+mc_bot/logs/
+node_modules/
+__pycache__/
+*.pyc
+logs_*.txt
+.ap.ps1
