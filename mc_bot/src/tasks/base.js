@@ -22,6 +22,9 @@ const FAILURE_REASONS = Object.freeze({
   NO_SHELTER_MATERIAL: 'no_shelter_material',
   NO_SAFE_SPOT: 'no_safe_spot',
   PLACE_FAILED: 'place_failed',
+  THREAT_TOO_HIGH: 'threat_too_high',
+  PLAYER_UNAVAILABLE: 'player_unavailable',
+  CONTROL_FAILED: 'control_failed',
   TIMEOUT: 'timeout',
   LEASE_EXPIRED: 'lease_expired',
   CANCELLED: 'cancelled',
@@ -129,6 +132,8 @@ class Task {
   onPendingError(ctx, error) {
     this.fail(FAILURE_REASONS.INTERNAL_ERROR, { error });
   }
+
+  onFinish() {}
 
   onResume(ctx) {
     this._lastProgressAt = nowOf(ctx);
@@ -326,6 +331,11 @@ class Task {
     this.pending = null;
     this._preFreezeState = null;
     this._emit(details.ctx, 'task_done', { result: this.result });
+    try {
+      this.onFinish(details.ctx);
+    } catch (_) {
+      // 收尾失败不能把已完成任务改回失败。
+    }
     return true;
   }
 
@@ -341,6 +351,11 @@ class Task {
     this.pending = null;
     this._preFreezeState = null;
     this._emit(details.ctx, 'task_failed', { failure: { ...this.failure } });
+    try {
+      this.onFinish(details.ctx);
+    } catch (_) {
+      // 收尾失败不覆盖原始失败原因。
+    }
     return true;
   }
 
