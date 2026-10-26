@@ -32,6 +32,68 @@ const DEFAULTS = {
   features: {
     movement: true,
   },
+  brain: {
+    enabled: true,
+    // 第 1 阶段默认只观察、不接管旧 autonomy。验收 shadow 对比后再考虑关闭。
+    shadowMode: true,
+    tickMs: 100,
+    arbiterMs: 500,
+    logFile: 'brain-shadow.jsonl',
+    agenda: {
+      maxDepth: 12,
+      defaultLeaseMs: 600000,
+    },
+    perception: {
+      undergroundDepth: 8,
+      threatRadius: 16,
+      maxThreats: 8,
+      dayStartTick: 0,
+      duskTick: 12000,
+      nightStartTick: 13000,
+      ticksPerDay: 24000,
+    },
+    local: {
+      minHpToWork: 10,
+      dangerRadius: 8,
+      workAtNight: false,
+      localLeaseMs: 120000,
+      collectPriority: 40,
+      strollPriority: 30,
+      idlePriority: 10,
+      strollMinRadius: 4,
+      strollMaxRadius: 12,
+    },
+    watchdog: {
+      offlineLogSec: 15,
+      logRepeatSec: 30,
+      silentSec: 30,
+      progressStaleSec: 45,
+    },
+    tasks: {
+      idle: {
+        durationMs: 5000,
+      },
+      goto: {
+        tolerance: 2,
+        timeoutSec: 60,
+        maxAttempts: 3,
+        moveTimeoutMs: 10000,
+        arriveRange: 2,
+      },
+      collectBlock: {
+        selector: '#minecraft:logs',
+        count: 8,
+        radius: 32,
+        maxMinutes: 5,
+        maxNoTargetTicks: 20,
+        blacklistMs: 60000,
+        maxAttemptsPerBlock: 2,
+        moveTimeoutMs: 10000,
+        arriveRange: 2,
+        reach: 4.5,
+      },
+    },
+  },
 };
 
 function isPlainObject(value) {
@@ -103,6 +165,12 @@ function loadConfig() {
   config.features = isPlainObject(config.features) ? config.features : {};
   config.features.movement = config.features.movement !== false;
   config.features.pvp = config.features.pvp === true;
+
+  config.brain = isPlainObject(config.brain) ? config.brain : {};
+  config.brain.enabled = config.brain.enabled !== false;
+  config.brain.shadowMode = config.brain.shadowMode !== false;
+  config.brain.tickMs = Math.trunc(numberInRange(config.brain.tickMs, 100, 50, 2000));
+  config.brain.arbiterMs = Math.trunc(numberInRange(config.brain.arbiterMs, 500, 100, 10000));
 
   Object.defineProperty(config, '_warnings', {
     value: warnings,

@@ -264,6 +264,10 @@ function bestToolFromItems(bot, block) {
   return { best: candidates[0] || null, requirement };
 }
 
+function bestToolForBlock(bot, block) {
+  return bestToolFromItems(bot, block);
+}
+
 async function equipBestTool(bot, block) {
   try {
     if (!bot) return false;
@@ -410,4 +414,5 @@ module.exports = {
   armorScore,
   toolTypeOf,
   canHarvestWith,
+  bestToolForBlock,
 };
