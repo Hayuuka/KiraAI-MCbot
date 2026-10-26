@@ -1,0 +1,15 @@
+{
+  "plugin_id": "mc_bridge",
+  "display_name": "Minecraft Bridge",
+  "version": "0.1.0",
+  "author": "",
+  "core_version": ">=2.34.6",
+  "description": "把本机运行的 mineflayer 身体接入 KiraAI：动作注册为工具，游戏事件注入指定会话。",
+  "tags": ["minecraft", "bridge", "mineflayer"],
+  "locales": {
+    "zh": {
+      "display_name": "Minecraft 桥",
+      "description": "把本机 mineflayer 身体接入 KiraAI：动作注册为工具，游戏内事件注入会话，共用同一份人格与记忆。"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "enabled": {
+    "name": "启用",
+    "type": "switch",
+    "default": true,
+    "hint": "总开关。关闭后不再接受本机身体连接，所有工具返回未连接。"
+  },
+  "token": {
+    "name": "连接令牌",
+    "type": "string",
+    "default": "",
+    "hint": "与 mc_bot/config.json 里 link.token 完全一致的长随机字符串。留空则拒绝所有连接。"
+  },
+  "session": {
+    "name": "目标会话",
+    "type": "string",
+    "default": "Naocat-QQ:dm:2276753440",
+    "hint": "游戏事件注入到哪个会话，格式 adapter:类型:ID。默认是你的 QQ 私聊，不打扰群聊。"
+  },
+  "wake_on_chat_mention": {
+    "name": "被点名时唤醒",
+    "type": "switch",
+    "default": true,
+    "hint": "游戏里有人提到 bot 名字时，是否叫醒模型立即回应。"
+  },
+  "wake_on_self_event": {
+    "name": "自身事件唤醒",
+    "type": "switch",
+    "default": true,
+    "hint": "死亡、被踢、血量过低这类事件是否叫醒模型。"
+  },
+  "passive_whitelist": {
+    "name": "只进缓冲的玩家",
+    "type": "string",
+    "default": "",
+    "hint": "逗号分隔的玩家名。当前版本只响应点名，这个字段保留给以后扩展用。"
+  },
+  "max_wakes_per_hour": {
+    "name": "每小时唤醒上限",
+    "type": "number",
+    "default": 30,
+    "min": 1,
+    "max": 200,
+    "hint": "防止游戏内刷屏导致 LLM 费用失控。超过后事件只进缓冲不唤醒。"
+  },
+  "bot_aliases": {
+    "name": "别名",
+    "type": "string",
+    "default": "初小雪,小雪",
+    "hint": "逗号分隔。游戏内说到这些词都算在叫她（游戏名会自动包含，不用重复填）。"
+  },
+  "auto_play": {
+    "name": "自主玩耍",
+    "type": "switch",
+    "default": true,
+    "hint": "身体空闲时主动问模型接下来做什么，让 bot 自己决定行动。关掉后只在被点名或出事时唤醒。"
+  }
+}
