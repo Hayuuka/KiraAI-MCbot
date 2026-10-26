@@ -9,6 +9,7 @@ const { createAutonomy } = require('./autonomy');
 const { createActions } = require('./actions');
 const { createLink } = require('./link');
 const { createIntentRunner } = require('./intent');
+const { createBrain } = require('./body/brain');
 
 function formatEvent(event) {
   if (!event || !event.data) return '';
@@ -115,6 +116,16 @@ function createRuntime(options = {}) {
     },
   });
 
+  // 第 1 阶段：新行为层与旧 autonomy 并行运行。默认 shadowMode=true，
+  // 只采集感知、走任务栈并写对比日志，不发出任何游戏动作。
+  const brain = createBrain({
+    config,
+    connection,
+    legacy: autonomy,
+    log,
+    recordDir: path.join(__dirname, '..', 'logs'),
+  });
+
   // mc_plan 工具需要 intent 引用
   if (actions && typeof actions.attachIntent === 'function') {
     actions.attachIntent(intent);
@@ -145,14 +156,19 @@ function createRuntime(options = {}) {
     actions,
     link,
     intent,
+    brain,
     start() {
       autonomy.start();
       intent.start();
       link.start();
       connection.start();
+      brain.start();
       return runtime;
     },
     stop() {
+      try {
+        brain.stop();
+      } catch (_) {}
       try {
         link.stop();
       } catch (_) {}
