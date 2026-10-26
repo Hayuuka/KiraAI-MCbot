@@ -270,7 +270,9 @@ test('反射只冻结任务，解除后由 brain 恢复', () => {
   const { bot } = makeBot({ health: 20 });
   let now = 1000;
   const brain = createBrain({
-    config: { brain: { shadowMode: true, tickMs: 100, arbiterMs: 500 } },
+    // 这里验证的是反射冻结/恢复机制本身，因此打开执行路径；
+    // 任务仍是 idle，不会对 fake bot 发出动作。
+    config: { brain: { shadowMode: false, tickMs: 100, arbiterMs: 500 } },
     connection: { getBot: () => bot, isReady: () => true },
     log: { warn() {}, log() {} },
     record() {},

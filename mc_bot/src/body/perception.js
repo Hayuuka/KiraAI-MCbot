@@ -220,6 +220,7 @@ function nearbyEntities(bot, origin, config) {
           id: entity.id == null ? null : entity.id,
           type,
           dist: round1(dist),
+          position,
           threat: null,
           hp: numberOrNull(entity.health),
           aggressive: null,
