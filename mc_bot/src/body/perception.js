@@ -1,6 +1,7 @@
 'use strict';
 
 const inventorySkill = require('../skills/inventory');
+const combatSkill = require('../skills/combat');
 
 const HOSTILE_TYPES = new Set([
   'zombie', 'husk', 'drowned', 'skeleton', 'stray', 'bogged', 'creeper',
@@ -337,13 +338,25 @@ function perceive(bot, options = {}) {
     : Boolean(options.connection && typeof options.connection.isReady === 'function'
       ? options.connection.isReady()
       : bot);
+  const self = selfSnapshot(bot, position, inventory.armor);
+  const world = worldSnapshot(bot, position, config);
+  const threatContext = {
+    hp: self.hp,
+    armor: inventory.armor,
+    hostileCount: nearby.threats.length,
+    light: world.light,
+  };
+  const threats = nearby.threats.map((threat) => ({
+    ...threat,
+    threat: Math.round(combatSkill.threatScore(threat, threatContext) * 100) / 100,
+  }));
 
   return deepFreeze({
     t: Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now(),
     ready,
-    self: selfSnapshot(bot, position, inventory.armor),
-    world: worldSnapshot(bot, position, config),
-    threats: nearby.threats,
+    self,
+    world,
+    threats,
     nearby: {
       players: position ? nearbyPlayers(bot, position, config.maxNearby) : [],
       animals: nearby.animals,

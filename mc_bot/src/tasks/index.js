@@ -8,6 +8,9 @@ const { HealTask } = require('./heal');
 const { FleeTask } = require('./flee');
 const { SleepTask } = require('./sleep');
 const { ShelterTask } = require('./shelter');
+const { FightTask } = require('./fight');
+const { GuardTask } = require('./guard');
+const { AssistTask } = require('./assist');
 
 const registry = new Map();
 
@@ -67,6 +70,9 @@ register(HealTask);
 register(FleeTask);
 register(SleepTask);
 register(ShelterTask);
+register(FightTask);
+register(GuardTask);
+register(AssistTask);
 
 module.exports = {
   register,
@@ -83,4 +89,7 @@ module.exports = {
   FleeTask,
   SleepTask,
   ShelterTask,
+  FightTask,
+  GuardTask,
+  AssistTask,
 };
