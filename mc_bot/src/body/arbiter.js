@@ -1,9 +1,12 @@
 'use strict';
 
 const DRIVE_TASKS = Object.freeze({
-  night: { kind: 'sleep', priority: 60 },
-  health: { kind: 'heal', priority: 58 },
-  hunger: { kind: 'eat', priority: 55 },
+  night: [
+    { kind: 'sleep', priority: 60 },
+    { kind: 'shelter', priority: 59 },
+  ],
+  health: [{ kind: 'heal', priority: 58 }],
+  hunger: [{ kind: 'eat', priority: 55 }],
 });
 
 class Arbiter {
@@ -25,31 +28,32 @@ class Arbiter {
     if (!this.drives || typeof this.drives.urgent !== 'function') return null;
     const urgent = this.drives.urgent();
     for (const drive of urgent) {
-      const mapping = DRIVE_TASKS[drive];
-      if (!mapping) continue;
-      const TaskClass = this.tasks && this.tasks.get ? this.tasks.get(mapping.kind) : null;
-      if (!TaskClass) {
-        this._reportUnavailable(ctx, drive, mapping.kind);
-        continue;
-      }
+      const mappings = DRIVE_TASKS[drive] || [];
+      for (const mapping of mappings) {
+        const TaskClass = this.tasks && this.tasks.get ? this.tasks.get(mapping.kind) : null;
+        if (!TaskClass) {
+          this._reportUnavailable(ctx, drive, mapping.kind);
+          continue;
+        }
 
-      let spec = null;
-      try {
-        spec = TaskClass.feasible({ ...ctx, args: {} });
-      } catch (_) {
-        spec = null;
+        let spec = null;
+        try {
+          spec = TaskClass.feasible({ ...ctx, args: {} });
+        } catch (_) {
+          spec = null;
+        }
+        if (!spec) {
+          this._reportUnavailable(ctx, drive, mapping.kind);
+          continue;
+        }
+        return {
+          kind: mapping.kind,
+          args: spec.args || {},
+          priority: mapping.priority,
+          reason: 'drive_' + drive,
+          note: spec.note || '',
+        };
       }
-      if (!spec) {
-        this._reportUnavailable(ctx, drive, mapping.kind);
-        continue;
-      }
-      return {
-        kind: mapping.kind,
-        args: spec.args || {},
-        priority: mapping.priority,
-        reason: 'drive_' + drive,
-        note: spec.note || '',
-      };
     }
     return null;
   }

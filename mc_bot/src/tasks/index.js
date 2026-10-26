@@ -3,6 +3,11 @@
 const { IdleTask } = require('./idle');
 const { GotoTask } = require('./goto');
 const { CollectBlockTask } = require('./collect');
+const { EatTask } = require('./eat');
+const { HealTask } = require('./heal');
+const { FleeTask } = require('./flee');
+const { SleepTask } = require('./sleep');
+const { ShelterTask } = require('./shelter');
 
 const registry = new Map();
 
@@ -57,6 +62,11 @@ function kinds() {
 register(IdleTask);
 register(GotoTask);
 register(CollectBlockTask);
+register(EatTask);
+register(HealTask);
+register(FleeTask);
+register(SleepTask);
+register(ShelterTask);
 
 module.exports = {
   register,
@@ -68,4 +78,9 @@ module.exports = {
   IdleTask,
   GotoTask,
   CollectBlockTask,
+  EatTask,
+  HealTask,
+  FleeTask,
+  SleepTask,
+  ShelterTask,
 };
