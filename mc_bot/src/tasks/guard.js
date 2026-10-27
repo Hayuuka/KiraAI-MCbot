@@ -117,6 +117,7 @@ class GuardTask extends Task {
 
 GuardTask.kind = 'guard';
 GuardTask.priority = 50;
+GuardTask.selfTimed = true;
 GuardTask.schema = {
   type: 'object',
   properties: {

@@ -154,6 +154,7 @@ class GotoTask extends Task {
 
 GotoTask.kind = 'goto';
 GotoTask.priority = 30;
+GotoTask.selfTimed = true;
 GotoTask.schema = {
   type: 'object',
   properties: {

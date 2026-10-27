@@ -110,6 +110,7 @@ class HealTask extends Task {
 
 HealTask.kind = 'heal';
 HealTask.priority = 58;
+HealTask.selfTimed = true;
 HealTask.schema = { type: 'object', properties: {} };
 
 module.exports = { HealTask };

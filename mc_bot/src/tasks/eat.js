@@ -114,6 +114,7 @@ class EatTask extends Task {
 
 EatTask.kind = 'eat';
 EatTask.priority = 55;
+EatTask.selfTimed = true;
 EatTask.schema = {
   type: 'object',
   properties: {

@@ -11,6 +11,7 @@ function makeBot(options = {}) {
   const state = {
     items: options.items || [],
     position: options.position || vec3(0, 64, 0),
+    targets: options.targets || [],
   };
   return {
     username: 'ChuXiaoxue',
@@ -39,7 +40,11 @@ function makeBot(options = {}) {
       isMoving() { return false; },
     },
     blockAt() { return { name: 'air', boundingBox: 'empty', light: 15 }; },
-    findBlock() { return null; },
+    findBlock({ maxDistance, matching }) {
+      return state.targets.find((target) =>
+        matching(target) && target.position.distanceTo(state.position) <= maxDistance
+      ) || null;
+    },
     setControlState() {},
     clearControlStates() {},
     on() {},
@@ -105,6 +110,47 @@ function setupPreemption() {
   return { bot, brain, ctx, goto, records };
 }
 
+function setupCollectLease() {
+  const log = {
+    name: 'oak_log',
+    position: vec3(3, 64, 0),
+    boundingBox: 'block',
+  };
+  const bot = makeBot({
+    items: [{ name: 'stone_axe', count: 1 }],
+    targets: [log],
+  });
+  const brain = createBrain({
+    config: {
+      brain: {
+        shadowMode: true,
+        tickMs: 100,
+        arbiterMs: 500,
+        local: { localLeaseMs: 1000 },
+      },
+    },
+    connection: { getBot: () => bot, isReady: () => true },
+    drives: { urgent: () => [] },
+    log: { warn() {}, log() {} },
+    record() {},
+  });
+  const perception = makePerception(bot);
+  brain.perception = perception;
+  const ctx = {
+    bot,
+    now: 1000,
+    shadow: true,
+    config: brain.config,
+    agenda: brain.agenda,
+    tasks: brain.tasks,
+    drives: brain.drives,
+    watchdog: brain.watchdog,
+    perception,
+    record() {},
+  };
+  return { brain, ctx };
+}
+
 test('栈顶非空时，饥饿需求能否插入', () => {
   const { brain, ctx, goto } = setupPreemption();
   brain._arbitrate(ctx);
@@ -125,4 +171,19 @@ test('高优先级任务结束后，被暂停的任务恢复', () => {
 
   assert.equal(brain.agenda.top(), goto);
   assert.equal(goto.state, 'running');
+});
+
+test('本地 collectBlock 任务能否活过 localLeaseMs', () => {
+  const { brain, ctx } = setupCollectLease();
+  const task = brain._arbitrate(ctx);
+  assert.equal(task.kind, 'collectBlock');
+  assert.equal(task.leaseExpiresAt, null);
+
+  for (const now of [2000, 3000, 4000, 5000, 6000, 7000]) {
+    brain.agenda.tick({ ...ctx, now });
+  }
+
+  assert.equal(brain.agenda.top(), task);
+  assert.notEqual(task.state, 'failed');
+  assert.notEqual(task.failure && task.failure.reason, 'lease_expired');
 });
