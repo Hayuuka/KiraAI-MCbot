@@ -11,6 +11,7 @@ const { ShelterTask } = require('./shelter');
 const { FightTask } = require('./fight');
 const { GuardTask } = require('./guard');
 const { AssistTask } = require('./assist');
+const { DigInTask } = require('./digIn');
 
 const registry = new Map();
 
@@ -73,6 +74,7 @@ register(ShelterTask);
 register(FightTask);
 register(GuardTask);
 register(AssistTask);
+register(DigInTask);
 
 module.exports = {
   register,
@@ -92,4 +94,5 @@ module.exports = {
   FightTask,
   GuardTask,
   AssistTask,
+  DigInTask,
 };

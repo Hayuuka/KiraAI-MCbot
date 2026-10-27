@@ -7,6 +7,8 @@ const vec3 = require('vec3');
 const { createBrain } = require('../src/body/brain');
 const { perceive } = require('../src/body/perception');
 const { GotoTask } = require('../src/tasks/goto');
+const { DigInTask } = require('../src/tasks/digIn');
+const mineSkill = require('../src/skills/mine');
 
 function makeBot(options = {}) {
   const state = {
@@ -189,6 +191,39 @@ function setupArbiterThreat(threat) {
   };
 }
 
+function setupNightFallback() {
+  const bot = makeBot();
+  bot.blockAt = (position) => position.y === 63
+    ? { name: 'dirt', boundingBox: 'block', light: 4 }
+    : { name: 'air', boundingBox: 'empty', light: 15 };
+  const brain = createBrain({
+    config: { brain: { shadowMode: true, tickMs: 100, arbiterMs: 500 } },
+    connection: { getBot: () => bot, isReady: () => true },
+    drives: { urgent: () => ['night'] },
+    log: { warn() {}, log() {} },
+    record() {},
+  });
+  const perception = makePerception(bot);
+  perception.world = { isDay: false, ticksToDusk: 0, underground: false, light: 4 };
+  brain.perception = perception;
+  return {
+    bot,
+    brain,
+    ctx: {
+      bot,
+      now: 1000,
+      shadow: true,
+      config: brain.config,
+      agenda: brain.agenda,
+      tasks: brain.tasks,
+      drives: brain.drives,
+      watchdog: brain.watchdog,
+      perception,
+      record() {},
+    },
+  };
+}
+
 test('栈顶非空时，饥饿需求能否插入', () => {
   const { brain, ctx, goto } = setupPreemption();
   brain._arbitrate(ctx);
@@ -269,4 +304,54 @@ test('手持面包但背包里有铁剑时，单只僵尸仍判为可打', () =>
 
   assert.equal(snapshot.threats[0].canWin, true);
   assert.ok(snapshot.myPower > 6.8);
+});
+
+test('夜间无床、背包无方块、无山壁时，产出非 idle 的兜底任务', () => {
+  const { brain, ctx } = setupNightFallback();
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'digIn');
+  assert.notEqual(choice.kind, 'idle');
+});
+
+test('digIn 在天亮后完成', () => {
+  const { bot, brain, ctx } = setupNightFallback();
+  const task = new DigInTask({}, { source: 'local', priority: 58 });
+  task.tick(ctx);
+  assert.equal(task.state, 'running');
+  task.tick({
+    ...ctx,
+    now: 2000,
+    perception: { ...ctx.perception, world: { ...ctx.perception.world, isDay: true } },
+  });
+  assert.equal(task.isDone({
+    ...ctx,
+    perception: { ...ctx.perception, world: { ...ctx.perception.world, isDay: true } },
+  }), true);
+  assert.equal(task.state, 'done');
+  assert.ok(brain);
+  assert.ok(bot);
+});
+
+test('digIn 挖成功后不再重复挖', async () => {
+  const { bot, ctx } = setupNightFallback();
+  const originalMine = mineSkill.mineBlock;
+  let mineCalls = 0;
+  mineSkill.mineBlock = async () => {
+    mineCalls += 1;
+    bot.entity.position = vec3(0, 63, 0);
+    return { ok: true };
+  };
+  const task = new DigInTask({}, { source: 'local', priority: 58 });
+  const liveCtx = { ...ctx, shadow: false };
+  try {
+    task.tick(liveCtx);
+    await new Promise((resolve) => setImmediate(resolve));
+    task.tick({ ...liveCtx, now: 1100 });
+    for (let index = 0; index < 5; index += 1) {
+      task.tick({ ...liveCtx, now: 1200 + index * 100 });
+    }
+  } finally {
+    mineSkill.mineBlock = originalMine;
+  }
+  assert.equal(mineCalls, 1);
 });

@@ -95,7 +95,9 @@ class Arbiter {
       return { kind: 'flee', args: {}, priority: 70, reason: 'threat_too_strong' };
     }
     if (perception.world.isDay === false && !perception.world.underground && !local.workAtNight) {
-      return idle('night_without_stage1_shelter');
+      const night = this._chooseNight(ctx);
+      if (night) return night;
+      return idle('night_no_option:sleep=no_bed,shelter=no_material_or_wall,digIn=no_solid_ground');
     }
 
     const candidates = this.tasks.available(ctx, this._taskDefaults());
@@ -123,6 +125,33 @@ class Arbiter {
       };
     }
     return idle('no_local_work');
+  }
+
+  _chooseNight(ctx) {
+    const options = [
+      { kind: 'sleep', priority: 60 },
+      { kind: 'shelter', priority: 59 },
+      { kind: 'digIn', priority: 58 },
+    ];
+    for (const option of options) {
+      const TaskClass = this.tasks && this.tasks.get ? this.tasks.get(option.kind) : null;
+      if (!TaskClass) continue;
+      let spec = null;
+      try {
+        spec = TaskClass.feasible({ ...ctx, args: {} });
+      } catch (_) {
+        spec = null;
+      }
+      if (!spec) continue;
+      return {
+        kind: option.kind,
+        args: spec.args || {},
+        priority: option.priority,
+        reason: 'night_' + option.kind,
+        note: spec.note || '',
+      };
+    }
+    return null;
   }
 
   _taskDefaults() {
