@@ -72,8 +72,28 @@ class Arbiter {
 
     const hp = perception.self.hp;
     if (hp != null && hp < local.minHpToWork) return idle('low_hp');
-    const dangerous = perception.threats.find((threat) => threat.dist <= local.dangerRadius);
-    if (dangerous) return idle('threat_nearby');
+    const threat = perception.threats.find((entry) => entry.dist <= local.dangerRadius);
+    if (threat) {
+      if (threat.canWin === false) {
+        return { kind: 'flee', args: {}, priority: 70, reason: 'threat_too_strong' };
+      }
+      const FightTask = this.tasks && this.tasks.get ? this.tasks.get('fight') : null;
+      const spec = FightTask
+        ? FightTask.feasible({
+          ...ctx,
+          args: { targetId: threat.id, type: threat.type },
+        })
+        : null;
+      if (spec) {
+        return {
+          kind: 'fight',
+          args: spec.args || { targetId: threat.id, type: threat.type },
+          priority: 50,
+          reason: 'engage_threat',
+        };
+      }
+      return { kind: 'flee', args: {}, priority: 70, reason: 'threat_too_strong' };
+    }
     if (perception.world.isDay === false && !perception.world.underground && !local.workAtNight) {
       return idle('night_without_stage1_shelter');
     }

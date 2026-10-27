@@ -69,8 +69,7 @@ function threatScore(threat, context = {}) {
   return base * distFactor * gearFactor * countFactor * lightFactor + hpFactor;
 }
 
-function weaponDamage(bot) {
-  const item = bot && bot.heldItem;
+function weaponDamageForItem(bot, item) {
   const name = bareName(item && item.name);
   if (WEAPON_DAMAGE[name] != null) return WEAPON_DAMAGE[name];
   try {
@@ -81,8 +80,18 @@ function weaponDamage(bot) {
   return 1;
 }
 
+function weaponDamage(bot) {
+  return weaponDamageForItem(bot, bot && bot.heldItem);
+}
+
+function bestWeaponDamage(bot) {
+  const held = weaponDamage(bot);
+  const best = inventory.bestWeapon(bot);
+  return Math.max(held, weaponDamageForItem(bot, best));
+}
+
 function myPower(bot, armor = 0) {
-  const damage = weaponDamage(bot);
+  const damage = bestWeaponDamage(bot);
   const hp = Number(bot && bot.health);
   const food = Number(bot && bot.food);
   return damage * 1.8 +
@@ -243,6 +252,8 @@ module.exports = {
   WEAPON_DAMAGE,
   threatScore,
   weaponDamage,
+  weaponDamageForItem,
+  bestWeaponDamage,
   myPower,
   shouldFlee,
   attackCooldownMs,

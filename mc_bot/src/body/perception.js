@@ -350,6 +350,8 @@ function perceive(bot, options = {}) {
     ...threat,
     threat: Math.round(combatSkill.threatScore(threat, threatContext) * 100) / 100,
   }));
+  const power = Math.round(combatSkill.myPower(bot, inventory.armor) * 100) / 100;
+  for (const threat of threats) threat.canWin = threat.threat <= power;
 
   return deepFreeze({
     t: Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now(),
@@ -357,6 +359,7 @@ function perceive(bot, options = {}) {
     self,
     world,
     threats,
+    myPower: power,
     nearby: {
       players: position ? nearbyPlayers(bot, position, config.maxNearby) : [],
       animals: nearby.animals,

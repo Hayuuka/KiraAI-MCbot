@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const vec3 = require('vec3');
 
 const { createBrain } = require('../src/body/brain');
+const { perceive } = require('../src/body/perception');
 const { GotoTask } = require('../src/tasks/goto');
 
 function makeBot(options = {}) {
@@ -12,8 +13,9 @@ function makeBot(options = {}) {
     items: options.items || [],
     position: options.position || vec3(0, 64, 0),
     targets: options.targets || [],
+    held: options.held || null,
   };
-  return {
+  const bot = {
     username: 'ChuXiaoxue',
     health: options.health ?? 20,
     food: options.food ?? 10,
@@ -49,6 +51,11 @@ function makeBot(options = {}) {
     clearControlStates() {},
     on() {},
   };
+  Object.defineProperty(bot, 'heldItem', {
+    get: () => state.held,
+    set: (value) => { state.held = value; },
+  });
+  return bot;
 }
 
 function makePerception(bot) {
@@ -151,6 +158,37 @@ function setupCollectLease() {
   return { brain, ctx };
 }
 
+function setupArbiterThreat(threat) {
+  const zombie = { id: 2, name: 'zombie', position: vec3(5, 64, 0), health: 20 };
+  const bot = makeBot({ items: [{ name: 'iron_sword', count: 1 }], entities: { 2: zombie } });
+  const brain = createBrain({
+    config: { brain: { shadowMode: true, tickMs: 100, arbiterMs: 500 } },
+    connection: { getBot: () => bot, isReady: () => true },
+    drives: { urgent: () => [] },
+    log: { warn() {}, log() {} },
+    record() {},
+  });
+  const perception = makePerception(bot);
+  perception.threats = [threat];
+  brain.perception = perception;
+  return {
+    bot,
+    brain,
+    ctx: {
+      bot,
+      now: 1000,
+      shadow: true,
+      config: brain.config,
+      agenda: brain.agenda,
+      tasks: brain.tasks,
+      drives: brain.drives,
+      watchdog: brain.watchdog,
+      perception,
+      record() {},
+    },
+  };
+}
+
 test('栈顶非空时，饥饿需求能否插入', () => {
   const { brain, ctx, goto } = setupPreemption();
   brain._arbitrate(ctx);
@@ -186,4 +224,49 @@ test('本地 collectBlock 任务能否活过 localLeaseMs', () => {
   assert.equal(brain.agenda.top(), task);
   assert.notEqual(task.state, 'failed');
   assert.notEqual(task.failure && task.failure.reason, 'lease_expired');
+});
+
+test('8 格内有僵尸时，仲裁器产出 fight 而不是 idle', () => {
+  const { brain, ctx } = setupArbiterThreat({
+    id: 2,
+    type: 'zombie',
+    dist: 5,
+    threat: 2,
+    canWin: true,
+  });
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'fight');
+  assert.deepEqual(choice.args, { targetId: 2, type: 'zombie' });
+});
+
+test('打不过的威胁产出 flee', () => {
+  const { brain, ctx } = setupArbiterThreat({
+    id: 9,
+    type: 'warden',
+    dist: 5,
+    threat: 999,
+    canWin: false,
+  });
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'flee');
+});
+
+test('手持面包但背包里有铁剑时，单只僵尸仍判为可打', () => {
+  const zombie = { id: 2, name: 'zombie', position: vec3(5, 64, 0), health: 20 };
+  const bot = makeBot({
+    held: { name: 'bread', count: 1 },
+    items: [
+      { name: 'bread', count: 1 },
+      { name: 'iron_sword', count: 1 },
+    ],
+    entities: { 2: zombie },
+  });
+  const snapshot = perceive(bot, {
+    ready: true,
+    now: 1000,
+    config: { threatRadius: 16 },
+  });
+
+  assert.equal(snapshot.threats[0].canWin, true);
+  assert.ok(snapshot.myPower > 6.8);
 });
