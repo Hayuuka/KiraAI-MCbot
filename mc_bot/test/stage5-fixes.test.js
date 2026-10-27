@@ -355,3 +355,17 @@ test('digIn 挖成功后不再重复挖', async () => {
   }
   assert.equal(mineCalls, 1);
 });
+
+test('反射打断 30 秒后，任务 elapsedSec 是否跳过了这 30 秒', () => {
+  const { brain, ctx } = setupPreemption();
+  const task = new GotoTask({ x: 10, z: 0, tolerance: 2 }, { source: 'local', priority: 30 });
+  task.tick({ ...ctx, now: 1000 });
+  const before = task.elapsedSec({ ...ctx, now: 11000 });
+  assert.ok(Math.abs(before - 10) < 1);
+
+  task.freeze({ ...ctx, now: 11000 });
+  task.thaw({ ...ctx, now: 41000 });
+  const after = task.elapsedSec({ ...ctx, now: 41000 });
+  assert.ok(Math.abs(after - 10) < 1);
+  assert.ok(brain);
+});

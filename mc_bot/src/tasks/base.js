@@ -94,6 +94,7 @@ class Task {
     this._prepared = false;
     this._preFreezeState = null;
     this._prePauseState = null;
+    this._frozenAt = null;
     this._lastProgressAt = null;
     this._lastProgressMetric = null;
     this._shadowPlannedAt = null;
@@ -147,8 +148,9 @@ class Task {
     this._lastProgressAt = nowOf(ctx);
   }
 
-  freeze() {
+  freeze(ctx) {
     if (this.isTerminal || this.isFrozen) return false;
+    this._frozenAt = nowOf(ctx);
     this._preFreezeState = this.state;
     this.state = TASK_STATE.FROZEN;
     return true;
@@ -168,8 +170,14 @@ class Task {
     return true;
   }
 
-  thaw() {
+  thaw(ctx) {
     if (!this.isFrozen) return false;
+    if (this._frozenAt != null) {
+      const delta = nowOf(ctx) - this._frozenAt;
+      if (this.startedAt != null) this.startedAt += delta;
+      if (this._lastProgressAt != null) this._lastProgressAt += delta;
+      this._frozenAt = null;
+    }
     this.state = this._preFreezeState || TASK_STATE.RUNNING;
     this._preFreezeState = null;
     return true;

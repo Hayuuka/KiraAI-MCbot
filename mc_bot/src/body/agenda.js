@@ -77,14 +77,14 @@ class Agenda {
     return task;
   }
 
-  freezeTop() {
+  freezeTop(ctx) {
     const task = this.top();
-    return Boolean(task && task.freeze());
+    return Boolean(task && task.freeze(ctx));
   }
 
-  thawTop() {
+  thawTop(ctx) {
     const task = this.top();
-    return Boolean(task && task.thaw());
+    return Boolean(task && task.thaw(ctx));
   }
 
   dropTop(reason = FAILURE_REASONS.CANCELLED) {

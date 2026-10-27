@@ -204,7 +204,7 @@ class Brain {
     const active = this.interrupts.evaluate(perception, ctx);
     if (active) {
       const before = this.agenda.top();
-      this.agenda.freezeTop();
+      this.agenda.freezeTop(ctx);
       this.interrupts.run(active, ctx);
       this.stats.interruptedTicks += 1;
       this._wasInterrupted = true;
@@ -216,7 +216,7 @@ class Brain {
     }
 
     if (this._wasInterrupted) {
-      this.agenda.thawTop();
+      this.agenda.thawTop(ctx);
       const top = this.agenda.top();
       if (top && typeof top.onResume === 'function') top.onResume(ctx);
       this._wasInterrupted = false;
