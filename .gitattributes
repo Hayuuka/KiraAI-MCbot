@@ -1,0 +1,3 @@
+# Windows 批处理必须是 CRLF，否则 cmd.exe 解析多行 if 块会失败
+*.bat text eol=crlf
+*.cmd text eol=crlf
