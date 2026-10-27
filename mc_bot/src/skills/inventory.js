@@ -159,6 +159,17 @@ function weaponScore(item) {
   return 0;
 }
 
+function bestWeapon(bot) {
+  return inventoryItems(bot)
+    .filter((item) => weaponScore(item) > 0)
+    .sort((a, b) => weaponScore(b) - weaponScore(a))[0] || null;
+}
+
+function bestWeaponScore(bot) {
+  const weapon = bestWeapon(bot);
+  return weapon ? weaponScore(weapon) : 0;
+}
+
 function armorSlotOf(name) {
   const text = normalizeItemName(name);
   if (/_helmet$/.test(text)) return 'head';
@@ -411,6 +422,8 @@ module.exports = {
   dropItem,
   uniqueItemNames,
   weaponScore,
+  bestWeapon,
+  bestWeaponScore,
   armorScore,
   toolTypeOf,
   canHarvestWith,
