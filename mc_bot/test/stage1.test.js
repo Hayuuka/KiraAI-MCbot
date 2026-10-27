@@ -278,7 +278,8 @@ test('反射只冻结任务，解除后由 brain 恢复', () => {
     record() {},
     now: () => now,
   });
-  const task = new IdleTask({ durationMs: 30000 }, { source: 'test' });
+  // 高优先级，避免被仲裁器的普通 goto/collect 抢占；本测试只验证 freeze/thaw。
+  const task = new IdleTask({ durationMs: 30000 }, { source: 'test', priority: 80 });
   brain.agenda.push(task, { now, leaseMs: 60000 });
   brain.start();
   brain.tick();
