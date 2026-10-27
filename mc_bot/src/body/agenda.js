@@ -35,8 +35,10 @@ class Agenda {
     if (this._tasks.length >= this.maxDepth) return null;
 
     const now = Number.isFinite(Number(options.now)) ? Number(options.now) : this.now();
-    const leaseMs = Math.max(1000, Math.trunc(Number(options.leaseMs) || this.defaultLeaseMs));
-    task.leaseExpiresAt = now + leaseMs;
+    const leaseMs = options.leaseMs === null
+      ? null
+      : Math.max(1000, Math.trunc(Number(options.leaseMs) || this.defaultLeaseMs));
+    task.leaseExpiresAt = leaseMs === null ? null : now + leaseMs;
     const previousTop = this.top();
     this._tasks.push(task);
     if (previousTop && previousTop.state === TASK_STATE.RUNNING) previousTop.pause();

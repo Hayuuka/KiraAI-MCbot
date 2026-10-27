@@ -120,6 +120,7 @@ class FleeTask extends Task {
 
 FleeTask.kind = 'flee';
 FleeTask.priority = 70;
+FleeTask.selfTimed = true;
 FleeTask.schema = {
   type: 'object',
   properties: { distance: { type: 'integer', minimum: 4 } },

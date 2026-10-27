@@ -225,6 +225,7 @@ class CollectBlockTask extends Task {
 
 CollectBlockTask.kind = 'collectBlock';
 CollectBlockTask.priority = 40;
+CollectBlockTask.selfTimed = true;
 CollectBlockTask.schema = {
   type: 'object',
   properties: {

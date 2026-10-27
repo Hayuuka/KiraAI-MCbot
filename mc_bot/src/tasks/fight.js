@@ -182,6 +182,7 @@ class FightTask extends Task {
 
 FightTask.kind = 'fight';
 FightTask.priority = 50;
+FightTask.selfTimed = true;
 FightTask.schema = {
   type: 'object',
   properties: {

@@ -333,10 +333,9 @@ class Brain {
       return null;
     }
 
-    this.agenda.push(task, {
-      now: ctx.now,
-      leaseMs: this.config.local.localLeaseMs,
-    });
+    const TaskClass = this.tasks.get ? this.tasks.get(choice.kind) : null;
+    const leaseMs = TaskClass && TaskClass.selfTimed ? null : this.config.local.localLeaseMs;
+    this.agenda.push(task, { now: ctx.now, leaseMs });
     if (top) {
       this._record('preempt', {
         from: top.kind,

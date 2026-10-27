@@ -204,6 +204,7 @@ class ShelterTask extends Task {
 
 ShelterTask.kind = 'shelter';
 ShelterTask.priority = 60;
+ShelterTask.selfTimed = true;
 ShelterTask.schema = { type: 'object', properties: {} };
 
 module.exports = { ShelterTask, PHASES };

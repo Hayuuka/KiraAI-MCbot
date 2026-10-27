@@ -227,6 +227,7 @@ class SleepTask extends Task {
 
 SleepTask.kind = 'sleep';
 SleepTask.priority = 60;
+SleepTask.selfTimed = true;
 SleepTask.schema = {
   type: 'object',
   properties: {

@@ -413,6 +413,8 @@ class Task {
   }
 }
 
+Task.selfTimed = false;
+
 module.exports = {
   Task,
   TASK_STATE,

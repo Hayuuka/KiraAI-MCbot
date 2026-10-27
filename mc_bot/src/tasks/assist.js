@@ -132,6 +132,7 @@ class AssistTask extends Task {
 
 AssistTask.kind = 'assist';
 AssistTask.priority = 50;
+AssistTask.selfTimed = true;
 AssistTask.schema = {
   type: 'object',
   properties: {
