@@ -26,6 +26,8 @@ const FAILURE_REASONS = Object.freeze({
   THREAT_TOO_HIGH: 'threat_too_high',
   PLAYER_UNAVAILABLE: 'player_unavailable',
   CONTROL_FAILED: 'control_failed',
+  DIG_FAILED: 'dig_failed',
+  NO_SOLID_GROUND: 'no_solid_ground',
   TIMEOUT: 'timeout',
   LEASE_EXPIRED: 'lease_expired',
   CANCELLED: 'cancelled',

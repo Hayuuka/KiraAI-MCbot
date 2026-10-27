@@ -215,6 +215,11 @@ const DEFAULTS = {
         safeHoldMs: 3000,
         durationMs: 600000,
       },
+      digIn: {
+        maxMinutes: 12,
+        maxAttempts: 3,
+        digTimeoutMs: 15000,
+      },
     },
   },
 };
