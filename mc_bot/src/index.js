@@ -10,6 +10,7 @@ const { createActions } = require('./actions');
 const { createLink } = require('./link');
 const { createIntentRunner } = require('./intent');
 const { createBrain } = require('./body/brain');
+const { createMind } = require('./body/mind');
 
 function formatEvent(event) {
   if (!event || !event.data) return '';
@@ -23,6 +24,7 @@ function createRuntime(options = {}) {
   const config = options.config || loadConfig();
   const log = options.log || console;
   let link = null;
+  let mind = null;
 
   const eventHub = createEventHub({
     config,
@@ -76,6 +78,7 @@ function createRuntime(options = {}) {
         return;
       }
       eventHub.reportSystem('kicked: ' + reason);
+      if (mind) mind.requestWake('kicked');
     },
     onError: (error) => {
       try {
@@ -90,6 +93,7 @@ function createRuntime(options = {}) {
       } catch (_) {
         return;
       }
+      if (mind) mind.requestWake('death');
     },
   });
 
@@ -98,6 +102,11 @@ function createRuntime(options = {}) {
   // 建完后把 intent 引用注入进去，供 mc_plan 工具使用
   const actions = createActions({ config, connection, eventHub, autonomy, log });
   link = createLink({ config, actions, log });
+  mind = createMind({
+    link,
+    config: config.brain && config.brain.mind,
+    log,
+  });
 
   const intent = createIntentRunner({
     config,
@@ -122,13 +131,19 @@ function createRuntime(options = {}) {
     config,
     connection,
     legacy: autonomy,
+    mind,
     log,
     recordDir: path.join(__dirname, '..', 'logs'),
   });
+  mind.attachBrain(brain);
+  mind.setRecorder((event, payload) => brain._record(event, payload));
 
-  // mc_plan 工具需要 intent 引用
+  // mc_plan / mc_do 工具需要 intent 与 mind 引用
   if (actions && typeof actions.attachIntent === 'function') {
     actions.attachIntent(intent);
+  }
+  if (actions && typeof actions.attachMind === 'function') {
+    actions.attachMind(mind);
   }
 
   // 手动指令（用户下的话）优先于自动计划。
@@ -156,6 +171,7 @@ function createRuntime(options = {}) {
     actions,
     link,
     intent,
+    mind,
     brain,
     start() {
       autonomy.start();

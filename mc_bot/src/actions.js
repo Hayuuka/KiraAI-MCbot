@@ -79,6 +79,7 @@ function createActions(options = {}) {
   const autonomy = options.autonomy || null;
   // intent 在 actions 之后才创建（它依赖 link），所以用可变引用，稍后注入
   let intent = options.intent || null;
+  let mind = options.mind || null;
   const log = options.log || console;
   let auditReady = false;
 
@@ -619,9 +620,41 @@ function createActions(options = {}) {
     }
   }
 
+  function body() {
+    try {
+      if (!mind || typeof mind.body !== 'function') return { ok: false, error: 'mind unavailable' };
+      return mind.body();
+    } catch (error) {
+      return { ok: false, error: errorText(error) };
+    }
+  }
+
+  async function doTask(args = {}, meta = {}) {
+    try {
+      if (!mind || typeof mind.onReply !== 'function') return { ok: false, error: 'mind unavailable' };
+      const source = args && typeof args === 'object' ? args : {};
+      const doValue = String(source.do ?? source.task ?? '').trim();
+      if (!doValue) return { ok: false, error: 'invalid_args' };
+      const taskArgs = source.args && typeof source.args === 'object' && !Array.isArray(source.args)
+        ? source.args
+        : {};
+      const result = await mind.onReply(doValue, taskArgs);
+      if (result && result.ok && source.say) {
+        const spoken = await say({ text: source.say });
+        result.say = spoken.ok ? { ok: true, text: spoken.text } : { ok: false, error: spoken.error };
+      }
+      return result;
+    } catch (error) {
+      return { ok: false, error: errorText(error) };
+    }
+  }
+
   const handlers = {
     say,
     status,
+    body,
+    doTask,
+    'do': doTask,
     inventory,
     drop,
     equip,
@@ -663,9 +696,14 @@ function createActions(options = {}) {
     intent = runner;
   }
 
+  function attachMind(runner) {
+    mind = runner;
+  }
+
   return {
     ...handlers,
     attachIntent,
+    attachMind,
     invoke,
     handlers,
     toolNames: Object.keys(handlers),

@@ -71,7 +71,7 @@ function makeFakeWorld() {
     inventory: {
       slots: Array(46).fill(null),
       items: () => items.slice(),
-      emptySlotCount: () => 36 - items.length,
+      emptySlotCount: () => 20,
     },
     pathfinder: {
       setGoal(nextGoal) {

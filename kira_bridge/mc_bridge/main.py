@@ -160,7 +160,14 @@ class McBridgePlugin(BasePlugin):
                 if body.get("ok"):
                     future.set_result(body.get("data") if body.get("data") is not None else {})
                 else:
-                    future.set_exception(RuntimeError(str(body.get("error") or "remote error")))
+                    error_payload = {
+                        key: value for key, value in body.items()
+                        if key not in ("token", "type", "id", "ok", "error")
+                    }
+                    future.set_result({
+                        "__remote_error__": str(body.get("error") or "remote error"),
+                        **error_payload,
+                    })
             return {"ok": True}
 
         if kind == "event":
@@ -225,6 +232,10 @@ class McBridgePlugin(BasePlugin):
 
         if not isinstance(data, dict):
             return {"ok": True, "data": data}
+        if "__remote_error__" in data:
+            error = str(data.get("__remote_error__") or "remote error")
+            details = {key: value for key, value in data.items() if key != "__remote_error__"}
+            return {"ok": False, "error": error, **details}
         return {"ok": True, **data}
 
     # ------------------------------------------------------------------
@@ -238,6 +249,37 @@ class McBridgePlugin(BasePlugin):
     )
     async def mc_status(self, event: KiraMessageBatchEvent = None):
         return await self.rpc("mc_status", {}, timeout=6)
+
+    @register.tool(
+        "mc_body",
+        "查看我现在的完整状态：正在做什么、最近结果、还能做什么、为什么没做事。",
+        {"type": "object", "properties": {}, "required": []},
+    )
+    async def mc_body(self, event: KiraMessageBatchEvent = None):
+        return await self.rpc("mc_body", {}, timeout=6)
+
+    @register.tool(
+        "mc_do",
+        "让我做一件具体的事。只能做 mc_body 返回的 can 列表里列出的事；不要自己编任务名。",
+        {
+            "type": "object",
+            "properties": {
+                "do": {"type": "string", "description": "mc_body.can[].do，例如 collectBlock、goto、sleep"},
+                "args": {"type": "object", "description": "对应 can[].args，可原样传入"},
+                "say": {"type": "string", "description": "可选：开始执行时在游戏里说一句话"},
+            },
+            "required": ["do"],
+        },
+    )
+    async def mc_do(self, event: KiraMessageBatchEvent = None, do: str = "", args: dict | None = None,
+                    say: str = ""):
+        task_name = str(do or "").strip()
+        if not task_name:
+            return {"ok": False, "error": "do 不能为空"}
+        payload = {"do": task_name, "args": args if isinstance(args, dict) else {}}
+        if say:
+            payload["say"] = str(say)[:200]
+        return await self.rpc("mc_do", payload, timeout=8)
 
     @register.tool(
         "mc_say",
@@ -258,7 +300,7 @@ class McBridgePlugin(BasePlugin):
 
     @register.tool(
         "mc_move",
-        "让 MC 身体移动到某个目标：跟随玩家、前往指定方块、或走到坐标。只等最多 12 秒，"
+        "已弃用，请优先用 mc_body + mc_do。让 MC 身体移动到某个目标：跟随玩家、前往指定方块、或走到坐标。只等最多 12 秒，"
         "没到会返回 moving=true，可以再调一次或用 mc_status 查看进度。",
         {
             "type": "object",
@@ -279,7 +321,7 @@ class McBridgePlugin(BasePlugin):
 
     @register.tool(
         "mc_follow",
-        "让 MC 身体持续跟随某个玩家。停止用 mc_stop。",
+        "已弃用，请优先用 mc_body + mc_do。让 MC 身体持续跟随某个玩家。停止用 mc_stop。",
         {
             "type": "object",
             "properties": {"player": {"type": "string", "description": "玩家名"}},
@@ -302,7 +344,7 @@ class McBridgePlugin(BasePlugin):
 
     @register.tool(
         "mc_plan",
-        "一次给出 2-5 步的连续计划，身体会按顺序自己执行，每步做完自动接下一步。"
+        "已弃用，请优先用 mc_body + mc_do。一次给出 2-5 步的连续计划，身体会按顺序自己执行，每步做完自动接下一步。"
         "比连续调用 mc_mode 更好：中间不用再问你，行动更连贯。",
         {
             "type": "object",
@@ -335,7 +377,7 @@ class McBridgePlugin(BasePlugin):
 
     @register.tool(
         "mc_mode",
-        "设置 MC 身体的持续行为模式。模式在本地循环执行，不需要反复调用。",
+        "已弃用，请优先用 mc_body + mc_do。设置 MC 身体的持续行为模式。模式在本地循环执行，不需要反复调用。",
         {
             "type": "object",
             "properties": {
@@ -368,6 +410,18 @@ class McBridgePlugin(BasePlugin):
             args["player"] = str(player)
         if block:
             args["block"] = str(block)
+        if requested in ("idle", "guard", "sleep"):
+            return await self.rpc("mc_do", {"do": requested, "args": {}}, timeout=8)
+        if requested == "mine":
+            task_args = {
+                "selector": str(block or "#minecraft:logs"),
+                "radius": radius,
+            }
+            if count:
+                task_args["count"] = max(1, int(count))
+            if maxMinutes:
+                task_args["maxMinutes"] = max(0.5, float(maxMinutes))
+            return await self.rpc("mc_do", {"do": "collectBlock", "args": task_args}, timeout=8)
         return await self.rpc("mc_mode", args, timeout=8)
 
     @register.tool(
@@ -462,7 +516,7 @@ class McBridgePlugin(BasePlugin):
 
     @register.tool(
         "mc_attack",
-        "让 MC 身体攻击附近的目标。PVP 默认关闭，只能打敌对生物。",
+        "已弃用，请优先用 mc_body + mc_do。让 MC 身体攻击附近的目标。PVP 默认关闭，只能打敌对生物。",
         {
             "type": "object",
             "properties": {"target": {"type": "string", "description": "目标实体名或玩家名"}},
@@ -522,6 +576,16 @@ class McBridgePlugin(BasePlugin):
             await self._on_low_health(data, session)
             return
 
+        if kind == "task_failed":
+            task_kind = str(data.get("kind") or "任务").strip()
+            reason = str(data.get("reason") or "unknown").strip()
+            await self._wake(
+                session,
+                f"[MC游戏内] 连续两次做 {task_kind} 都失败了（{reason}）。先看 mc_body 的 can 列表，换一个现在真做得到的事。",
+                key="task_failed",
+            )
+            return
+
         if kind == "system":
             text = str(data.get("text") or "").strip()
             if text and ("Grim" in text or "反作弊" in text):
@@ -538,6 +602,18 @@ class McBridgePlugin(BasePlugin):
         if not bool(self._cfg("auto_play", True)):
             return
         if self._wake_budget_exhausted():
+            return
+
+        # 新行为层：处境里已经带了真实可执行能力 can[]，不再由云端手写模式清单。
+        if isinstance(data.get("can"), list):
+            situation = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+            text = (
+                f"[MC游戏内] 身体现在空闲了，处境如下：\n{situation}\n"
+                "只从 can 列表里选一项，然后调用 mc_do（do 用 can[].do，args 可原样传）。"
+                "不要编造 can 里没有的能力；如果确实没合适的事，就选 idle。"
+            )
+            self.wake_times.append(time.time())
+            await self.ctx.publish_notice(session, MessageChain([Text(text)]), is_mentioned=True)
             return
 
         hp = data.get("hp")

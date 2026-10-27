@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/stage0.test.js test/stage1.test.js test/stage2.test.js test/stage3.test.js test/stage4.test.js test/stage5-fixes.test.js test/stage5.test.js"
+    "test": "node --test test/stage0.test.js test/stage1.test.js test/stage2.test.js test/stage3.test.js test/stage4.test.js test/stage5-fixes.test.js test/stage5.test.js test/stage6.test.js"
   },
   "engines": {
     "node": ">=18"

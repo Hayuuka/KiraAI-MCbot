@@ -84,6 +84,7 @@ class Brain {
     this.shadowMode = this.config.shadowMode !== false;
     this.connection = options.connection || {};
     this.legacy = options.legacy || null;
+    this.mind = options.mind || null;
     this.log = options.log || console;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.tasks = options.tasks || taskRegistry;
@@ -257,6 +258,17 @@ class Brain {
       });
     }
 
+    if (this.mind && typeof this.mind.maybeAsk === 'function') {
+      try {
+        this.mind.maybeAsk(ctx);
+      } catch (error) {
+        this._record('brain_error', {
+          stage: 'mind',
+          message: error && error.message ? error.message : String(error),
+        });
+      }
+    }
+
     return this.snapshot();
   }
 
@@ -277,6 +289,7 @@ class Brain {
       drives: this.drives.snapshot(),
       interrupts: this.interrupts.snapshot(),
       watchdog: this.watchdog.snapshot({ agenda: this.agenda, now: this.now() }),
+      mind: this.mind && typeof this.mind.snapshot === 'function' ? this.mind.snapshot() : null,
       stats: { ...this.stats },
     };
   }
@@ -312,6 +325,9 @@ class Brain {
     if (!choice) {
       this._record('local_no_decision', {});
       return null;
+    }
+    if (this.mind && typeof this.mind.observeChoice === 'function') {
+      this.mind.observeChoice(choice, ctx);
     }
 
     if (top && choice.priority <= top.priority) {
@@ -424,6 +440,13 @@ class Brain {
     if (event === 'agenda_settle') {
       if (payload && payload.outcome === 'done') this.stats.done += 1;
       if (payload && payload.outcome === 'failed') this.stats.failed += 1;
+    }
+    if (this.mind && typeof this.mind.observeAgendaEvent === 'function') {
+      try {
+        this.mind.observeAgendaEvent(event, payload || {});
+      } catch (_) {
+        // 观察失败不能影响任务栈。
+      }
     }
     this._record(event, payload || {});
   }

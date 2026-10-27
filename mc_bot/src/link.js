@@ -223,9 +223,14 @@ class LinkClient extends EventEmitter {
     }
     if (!result || typeof result !== 'object') result = { ok: false, error: 'no result' };
 
-    const frame = result.ok
-      ? { type: 'result', id, ok: true, data: (() => { const { ok, ...rest } = result; return rest; })() }
-      : { type: 'result', id, ok: false, error: String(result.error || 'unknown error') };
+    let frame;
+    if (result.ok) {
+      const { ok, ...rest } = result;
+      frame = { type: 'result', id, ok: true, data: rest };
+    } else {
+      const { ok, error, ...details } = result;
+      frame = { type: 'result', id, ok: false, error: String(error || 'unknown error'), ...details };
+    }
 
     try {
       await this._post('/result', frame);

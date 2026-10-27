@@ -40,6 +40,15 @@ const DEFAULTS = {
     driveMs: 1000,
     arbiterMs: 500,
     logFile: 'brain-shadow.jsonl',
+    mind: {
+      enabled: true,
+      timeoutMs: 20000,
+      cooldownMs: 30000,
+      maxAsksPerHour: 12,
+      socialIntervalMs: 600000,
+      taskFailureWakeMinMs: 60000,
+      maxCan: 6,
+    },
     agenda: {
       maxDepth: 12,
       defaultLeaseMs: 600000,
