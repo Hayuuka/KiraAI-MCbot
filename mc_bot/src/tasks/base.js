@@ -3,6 +3,7 @@
 const TASK_STATE = Object.freeze({
   PENDING: 'pending',
   RUNNING: 'running',
+  PAUSED: 'paused',
   FROZEN: 'frozen',
   DONE: 'done',
   FAILED: 'failed',
@@ -90,6 +91,7 @@ class Task {
     this._prepareStarted = false;
     this._prepared = false;
     this._preFreezeState = null;
+    this._prePauseState = null;
     this._lastProgressAt = null;
     this._lastProgressMetric = null;
     this._shadowPlannedAt = null;
@@ -101,6 +103,10 @@ class Task {
 
   get isFrozen() {
     return this.state === TASK_STATE.FROZEN;
+  }
+
+  get isPaused() {
+    return this.state === TASK_STATE.PAUSED;
   }
 
   static feasible() {
@@ -146,6 +152,20 @@ class Task {
     return true;
   }
 
+  pause() {
+    if (this.isTerminal || this.isFrozen || this.isPaused) return false;
+    this._prePauseState = this.state;
+    this.state = TASK_STATE.PAUSED;
+    return true;
+  }
+
+  resume() {
+    if (!this.isPaused) return false;
+    this.state = this._prePauseState || TASK_STATE.RUNNING;
+    this._prePauseState = null;
+    return true;
+  }
+
   thaw() {
     if (!this.isFrozen) return false;
     this.state = this._preFreezeState || TASK_STATE.RUNNING;
@@ -158,7 +178,7 @@ class Task {
       this.fail(FAILURE_REASONS.INTERNAL_ERROR, { message: 'task context has no bot' });
       return;
     }
-    if (this.isTerminal || this.isFrozen) return;
+    if (this.isTerminal || this.isFrozen || this.isPaused) return;
 
     const now = nowOf(ctx);
     if (!this._prepareStarted) {

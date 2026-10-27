@@ -9,6 +9,7 @@ class Agenda {
     this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.onEvent = typeof options.onEvent === 'function' ? options.onEvent : null;
     this._tasks = [];
+    this._ctx = null;
   }
 
   get size() {
@@ -36,7 +37,9 @@ class Agenda {
     const now = Number.isFinite(Number(options.now)) ? Number(options.now) : this.now();
     const leaseMs = Math.max(1000, Math.trunc(Number(options.leaseMs) || this.defaultLeaseMs));
     task.leaseExpiresAt = now + leaseMs;
+    const previousTop = this.top();
     this._tasks.push(task);
+    if (previousTop && previousTop.state === TASK_STATE.RUNNING) previousTop.pause();
     this._emit('agenda_push', {
       task: task.toJSON ? task.toJSON() : { id: task.id, kind: task.kind },
       leaseMs,
@@ -45,6 +48,7 @@ class Agenda {
   }
 
   tick(ctx) {
+    this._ctx = ctx;
     const task = this.top();
     if (!task) return null;
 
@@ -53,6 +57,11 @@ class Agenda {
       return task;
     }
     if (task.isFrozen) return task;
+    if (task.isPaused) {
+      task.resume();
+      if (typeof task.onResume === 'function') task.onResume(ctx);
+      this._emit('agenda_resume', { task: task.toJSON ? task.toJSON() : { id: task.id, kind: task.kind } });
+    }
 
     const now = nowOf(ctx);
     if (task.leaseExpiresAt !== null && now >= task.leaseExpiresAt) {
@@ -106,7 +115,7 @@ class Agenda {
     }));
   }
 
-  _settle(task) {
+  _settle(task, ctx = this._ctx) {
     const index = this._tasks.lastIndexOf(task);
     if (index >= 0) this._tasks.splice(index, 1);
     this._emit('agenda_settle', {
@@ -114,6 +123,12 @@ class Agenda {
       outcome: task.state,
       failure: task.failure ? { ...task.failure } : null,
     });
+    const next = this.top();
+    if (next && next.isPaused) {
+      next.resume();
+      if (typeof next.onResume === 'function') next.onResume(ctx);
+      this._emit('agenda_resume', { task: next.toJSON ? next.toJSON() : { id: next.id, kind: next.kind } });
+    }
   }
 
   _emit(event, payload) {

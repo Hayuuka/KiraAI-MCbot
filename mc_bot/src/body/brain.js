@@ -306,10 +306,21 @@ class Brain {
   }
 
   _arbitrate(ctx) {
-    if (this.agenda.top()) return null;
+    const top = this.agenda.top();
     const choice = this.arbiter.step(ctx);
     if (!choice) {
       this._record('local_no_decision', {});
+      return null;
+    }
+
+    if (top && choice.priority <= top.priority) {
+      this._record('preempt_rejected', {
+        from: top.kind,
+        to: choice.kind,
+        reason: choice.reason,
+        topPriority: top.priority,
+        choicePriority: choice.priority,
+      });
       return null;
     }
 
@@ -326,6 +337,13 @@ class Brain {
       now: ctx.now,
       leaseMs: this.config.local.localLeaseMs,
     });
+    if (top) {
+      this._record('preempt', {
+        from: top.kind,
+        to: choice.kind,
+        reason: choice.reason,
+      });
+    }
     this._record(this.shadowMode ? 'shadow_decision' : 'local_decision', {
       chosen: {
         kind: choice.kind,
