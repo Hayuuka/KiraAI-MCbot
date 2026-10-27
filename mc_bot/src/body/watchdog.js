@@ -12,6 +12,7 @@ class Watchdog {
     const top = ctx && ctx.agenda ? ctx.agenda.top() : null;
     if (!top || top.isTerminal || top.isFrozen) return false;
     if (!ctx.perception || !ctx.perception.self || ctx.perception.self.isSleeping) return false;
+    if (typeof top.expectsQuiet === 'function' && top.expectsQuiet(ctx)) return false;
     if (typeof top.progressStaleSec !== 'function') return false;
 
     const threshold = Math.max(

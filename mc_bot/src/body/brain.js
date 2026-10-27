@@ -110,6 +110,7 @@ class Brain {
     this._boundBot = null;
     this._lastHurtAt = 0;
     this._hurtSourceId = null;
+    this._lastRejectAt = new Map();
 
     const recordDir = options.recordDir || path.resolve(__dirname, '..', '..', 'logs');
     const fallbackRecorder = createJsonlRecorder(recordDir, this.config.logFile, this.log);
@@ -314,13 +315,22 @@ class Brain {
     }
 
     if (top && choice.priority <= top.priority) {
-      this._record('preempt_rejected', {
-        from: top.kind,
-        to: choice.kind,
-        reason: choice.reason,
-        topPriority: top.priority,
-        choicePriority: choice.priority,
-      });
+      // 同类同优先级的重复选择是正常的，不记日志。
+      if (choice.kind === top.kind) return null;
+
+      const key = `${top.kind}>${choice.kind}`;
+      const now = Number.isFinite(Number(ctx.now)) ? Number(ctx.now) : this.now();
+      const lastAt = this._lastRejectAt.get(key);
+      if (lastAt == null || now - lastAt >= 30000) {
+        this._lastRejectAt.set(key, now);
+        this._record('preempt_rejected', {
+          from: top.kind,
+          to: choice.kind,
+          reason: choice.reason,
+          topPriority: top.priority,
+          choicePriority: choice.priority,
+        });
+      }
       return null;
     }
 

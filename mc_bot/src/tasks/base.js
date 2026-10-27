@@ -136,6 +136,11 @@ class Task {
     return null;
   }
 
+  // 任务主动选择静默时返回 true，看门狗会跳过它。
+  expectsQuiet() {
+    return false;
+  }
+
   onPendingSuccess() {}
 
   onPendingError(ctx, error) {

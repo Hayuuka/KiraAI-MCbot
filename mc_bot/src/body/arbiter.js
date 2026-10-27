@@ -62,15 +62,18 @@ class Arbiter {
     const local = this.config.local || {};
     const perception = ctx.perception;
     const idleArgs = { durationMs: this.config.tasks.idle.durationMs };
-    const idle = (reason) => ({
+    const idle = (reason, note = '') => ({
       kind: 'idle',
       args: idleArgs,
       priority: local.idlePriority,
       reason,
+      note,
     });
 
     const hp = perception.self.hp;
-    if (hp != null && hp < local.minHpToWork) return idle('low_hp');
+    if (hp != null && hp < local.minHpToWork) {
+      return idle('low_hp_waiting_regen', `等待回血（food=${perception.self.food}）`);
+    }
     const threat = perception.threats.find((entry) => entry.dist <= local.dangerRadius);
     if (threat) {
       if (threat.canWin === false) {

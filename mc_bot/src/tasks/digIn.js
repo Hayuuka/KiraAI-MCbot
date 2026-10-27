@@ -67,6 +67,10 @@ class DigInTask extends Task {
     return Boolean(ctx.perception && ctx.perception.world.isDay === true);
   }
 
+  expectsQuiet(ctx) {
+    return this.dugOnce && !this.isDone(ctx);
+  }
+
   isFailed(ctx) {
     if (this.elapsedSec(ctx) > this.settings.maxMinutes * 60) {
       return { reason: FAILURE_REASONS.TIMEOUT };

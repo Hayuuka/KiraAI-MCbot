@@ -27,6 +27,7 @@ function makeFakeWorld() {
   ];
   let held = null;
   let sleepCalls = 0;
+  let goal = null;
   const calls = { dig: 0, attack: 0, move: 0 };
   for (let x = -12; x <= 16; x += 1) {
     for (let z = -12; z <= 12; z += 1) {
@@ -73,16 +74,36 @@ function makeFakeWorld() {
       emptySlotCount: () => 36 - items.length,
     },
     pathfinder: {
-      setGoal(goal) {
-        if (!goal) return;
+      setGoal(nextGoal) {
+        if (!nextGoal) {
+          goal = null;
+          return;
+        }
         calls.move += 1;
-        const x = Number.isFinite(goal.x) ? goal.x : bot.entity.position.x;
-        const z = Number.isFinite(goal.z) ? goal.z : bot.entity.position.z;
-        const y = Number.isFinite(goal.y) ? goal.y : bot.entity.position.y;
-        bot.entity.position = vec3(x, y, z);
+        goal = nextGoal;
       },
       setMovements() {},
-      isMoving() { return false; },
+      isMoving() {
+        if (!goal) return false;
+        return Math.hypot(goal.x - bot.entity.position.x, goal.z - bot.entity.position.z) > 1;
+      },
+      advance(step = 0.5) {
+        if (!goal) return;
+        const dx = Number(goal.x) - bot.entity.position.x;
+        const dz = Number(goal.z) - bot.entity.position.z;
+        const distance = Math.hypot(dx, dz);
+        if (distance <= 1) {
+          bot.entity.position = vec3(goal.x, bot.entity.position.y, goal.z);
+          goal = null;
+          return;
+        }
+        const amount = Math.min(step, distance);
+        bot.entity.position = vec3(
+          bot.entity.position.x + dx / distance * amount,
+          bot.entity.position.y,
+          bot.entity.position.z + dz / distance * amount
+        );
+      },
     },
     blockAt(position) {
       return blocks.get(key(position)) || block('air', position.x, position.y, position.z);
@@ -154,6 +175,7 @@ async function main() {
       zombie.position = vec3(5, 64, 0);
     }
     brain.tick();
+    bot.pathfinder.advance();
     const top = brain.agenda.top();
     const signature = brain.agenda.snapshot()
       .map((task) => task.kind + ':' + task.state)

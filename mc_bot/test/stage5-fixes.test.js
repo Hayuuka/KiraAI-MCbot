@@ -134,6 +134,7 @@ function setupCollectLease() {
     items: [{ name: 'stone_axe', count: 1 }],
     targets: [log],
   });
+  const records = [];
   const brain = createBrain({
     config: {
       brain: {
@@ -146,7 +147,7 @@ function setupCollectLease() {
     connection: { getBot: () => bot, isReady: () => true },
     drives: { urgent: () => [] },
     log: { warn() {}, log() {} },
-    record() {},
+    record: (entry) => records.push(entry),
   });
   const perception = makePerception(bot);
   brain.perception = perception;
@@ -160,9 +161,9 @@ function setupCollectLease() {
     drives: brain.drives,
     watchdog: brain.watchdog,
     perception,
-    record() {},
+    record: (event, payload) => records.push({ event, ...payload }),
   };
-  return { brain, ctx };
+  return { brain, ctx, records };
 }
 
 function setupArbiterThreat(threat) {
@@ -230,12 +231,16 @@ function setupNightFallback() {
 }
 
 test('栈顶非空时，饥饿需求能否插入', () => {
-  const { brain, ctx, goto } = setupPreemption();
+  const { brain, ctx, goto, records } = setupPreemption();
   brain._arbitrate(ctx);
 
   assert.equal(brain.agenda.size, 2);
   assert.equal(brain.agenda.top().kind, 'eat');
   assert.equal(goto.state, 'paused');
+  const preempts = records.filter((entry) => entry.event === 'preempt');
+  assert.equal(preempts.length, 1);
+  assert.equal(preempts[0].from, 'goto');
+  assert.equal(preempts[0].to, 'eat');
 });
 
 test('高优先级任务结束后，被暂停的任务恢复', () => {
@@ -391,6 +396,71 @@ test('反射打断 30 秒后，任务 elapsedSec 是否跳过了这 30 秒', () 
   const after = task.elapsedSec({ ...ctx, now: 41000 });
   assert.ok(Math.abs(after - 10) < 1);
   assert.ok(brain);
+});
+
+test('digIn 躲好后不会被看门狗回收', () => {
+  const { brain, ctx } = setupNightFallback();
+  const records = [];
+  const liveCtx = {
+    ...ctx,
+    record: (event, payload) => records.push({ event, ...payload }),
+  };
+  const task = new DigInTask({}, { source: 'local', priority: 58 });
+  task.tick(liveCtx);
+  task.dugOnce = true;
+  brain.agenda.push(task, { now: liveCtx.now, leaseMs: null });
+
+  for (let elapsed = 100; elapsed <= 60000; elapsed += 100) {
+    const next = { ...liveCtx, now: 1000 + elapsed };
+    brain.agenda.tick(next);
+    brain.watchdog.check(next);
+  }
+
+  assert.equal(brain.agenda.size, 1);
+  assert.equal(brain.agenda.top(), task);
+  assert.equal(records.some((entry) => entry.event === 'stuck_recovery'), false);
+});
+
+test('digIn 挖之前仍然会被看门狗管', () => {
+  const { brain, ctx } = setupNightFallback();
+  const records = [];
+  const liveCtx = {
+    ...ctx,
+    record: (event, payload) => records.push({ event, ...payload }),
+  };
+  const task = new DigInTask({}, { source: 'local', priority: 58 });
+  task.tick(liveCtx);
+  brain.agenda.push(task, { now: liveCtx.now, leaseMs: null });
+
+  for (let elapsed = 100; elapsed <= 45000; elapsed += 100) {
+    const next = { ...liveCtx, now: 1000 + elapsed };
+    brain.agenda.tick(next);
+    brain.watchdog.check(next);
+    if (brain.agenda.size === 0) break;
+  }
+
+  assert.equal(brain.agenda.size, 0);
+  assert.equal(task.failure && task.failure.reason, 'no_progress');
+  assert.equal(records.some((entry) => entry.event === 'stuck_recovery'), true);
+});
+
+test('重复的同类仲裁不会刷日志', () => {
+  const { brain, ctx, records } = setupCollectLease();
+  const task = brain._arbitrate(ctx);
+  assert.equal(task.kind, 'collectBlock');
+  for (let index = 0; index < 100; index += 1) brain._arbitrate(ctx);
+  const rejected = records.filter((entry) => entry.event === 'preempt_rejected');
+  assert.ok(rejected.length <= 1);
+});
+
+test('低血等待回血使用明确原因并带食物信息', () => {
+  const { brain, ctx } = setupCollectLease();
+  ctx.perception.self.hp = 5;
+  ctx.perception.self.food = 4;
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'idle');
+  assert.equal(choice.reason, 'low_hp_waiting_regen');
+  assert.match(choice.note, /food=4/);
 });
 
 test('goto 的目标 y 与实际地形差 3 格时能否判定到达', async () => {
