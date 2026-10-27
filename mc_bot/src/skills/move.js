@@ -273,10 +273,13 @@ async function moveTo(bot, target, options = {}) {
 
     const range = Math.max(0, Number(options.range) || 1);
     const timeoutMs = Math.max(1000, Math.min(30000, Number(options.timeoutMs) || 10000));
+    const horizontalOnly = options.horizontalOnly === true;
     const destination = makeVec3(bot, resolved.position);
     ensureMovements(bot);
 
-    const goal = new goals.GoalNear(destination.x, destination.y, destination.z, range);
+    const goal = horizontalOnly
+      ? new goals.GoalXZ(destination.x, destination.z)
+      : new goals.GoalNear(destination.x, destination.y, destination.z, range);
     bot.pathfinder.setGoal(goal);
 
     const startedAt = Date.now();
@@ -290,7 +293,9 @@ async function moveTo(bot, target, options = {}) {
         return { ok: false, error: 'bot position unavailable' };
       }
 
-      const distance = positionDistance(position, destination);
+      const distance = horizontalOnly
+        ? Math.hypot(position.x - destination.x, position.z - destination.z)
+        : positionDistance(position, destination);
       if (distance <= tolerance) {
         bot.pathfinder.setGoal(null);
         return {
