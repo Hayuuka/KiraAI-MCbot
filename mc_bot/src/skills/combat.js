@@ -66,7 +66,9 @@ function threatScore(threat, context = {}) {
   const gearFactor = Number.isFinite(armor) && armor >= 10 ? 0.7 : Number.isFinite(armor) && armor >= 4 ? 0.9 : 1.15;
   const countFactor = Number.isFinite(hostileCount) && hostileCount > 3 ? 1.5 : 1;
   const lightFactor = Number.isFinite(light) && light < 8 ? 1.1 : 1;
-  return base * distFactor * gearFactor * countFactor * lightFactor + hpFactor;
+  // 燃烧的怪贴上来自带火焰伤害，近身打它自己也会被点着
+  const fireFactor = threat && threat.onFire ? 1.45 : 1;
+  return base * distFactor * gearFactor * countFactor * lightFactor * fireFactor + hpFactor;
 }
 
 function weaponDamageForItem(bot, item) {

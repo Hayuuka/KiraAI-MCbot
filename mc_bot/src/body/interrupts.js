@@ -378,10 +378,52 @@ function createLavaReflex(config = {}) {
   };
 }
 
+/**
+ * 自己着火了。燃烧的僵尸贴上来自带火焰伤害，被点着后每秒掉血，
+ * 唯一的解法是进水（或走到雨里/细雪里）。
+ *
+ * 优先级排在 lava 之后、low_hp 之前：着火不会立刻死，但拖久了会。
+ */
+function createFireReflex(config = {}) {
+  const cfg = merge(DEFAULTS.brain.reflex.fire, config);
+  return {
+    kind: 'fire',
+    priority: 95,
+    cooldownMs: cfg.cooldownMs,
+    condition(perception) {
+      return Boolean(perception && perception.self && perception.self.onFire);
+    },
+    plan() {
+      return { action: 'extinguish' };
+    },
+    run(ctx) {
+      const bot = ctx.bot;
+      if (!bot || !bot.entity || !bot.entity.position) {
+        return { ok: false, reason: 'bot_unavailable' };
+      }
+      // 已经在液体里就不用动（水会灭火）
+      if (bot.entity.isInWater) return { ok: true, action: 'already_wet' };
+
+      const water = skills.move.findNearestBlock(bot, 'water', cfg.waterSearchRadius);
+      if (water) {
+        record(ctx, 'reflex_action', { kind: 'fire', ok: true, action: 'reach_water' });
+        return skills.move.moveTo(bot, water.position, {
+          range: 1,
+          timeoutMs: cfg.moveTimeoutMs,
+        });
+      }
+      // 没水：先跑开，别继续贴着燃烧的怪
+      record(ctx, 'reflex_action', { kind: 'fire', ok: true, action: 'retreat' });
+      return moveToSafeSpot(ctx, cfg, (ctx.perception && ctx.perception.threats) || [], 'fire');
+    },
+  };
+}
+
 function createDefaultInterrupts(options = {}) {
   const controller = new InterruptController(options);
   const config = options.reflexConfig || (options.config && options.config.reflex) || {};
   controller.register(createLavaReflex(config.lava));
+  controller.register(createFireReflex(config.fire));
   controller.register(createLowHpReflex(config.lowHp));
   controller.register(createHurtReflex(config.hurt));
   controller.register(createWaterReflex(config.water));
@@ -398,6 +440,7 @@ module.exports = {
   createDefaultInterrupts,
   createLowHpReflex,
   createHurtReflex,
+  createFireReflex,
   createWaterReflex,
   createLavaReflex,
 };

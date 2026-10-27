@@ -132,14 +132,14 @@ test('饥饿/健康/夜晚需求条使用不同触发与满足阈值', () => {
   assert.equal(drives.get('night').active, false);
 });
 
-test('默认反射已注册 lava > low_hp > hurt > water', () => {
+test('默认反射已注册 lava > fire > low_hp > hurt > water', () => {
   const interrupts = createDefaultInterrupts({
     reflexConfig: {},
     onEvent() {},
   });
   assert.deepEqual(
     interrupts.snapshot().map((entry) => entry.kind),
-    ['lava', 'low_hp', 'hurt', 'water']
+    ['lava', 'fire', 'low_hp', 'hurt', 'water']
   );
 });
 

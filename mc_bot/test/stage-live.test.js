@@ -272,3 +272,67 @@ test('打断日志不会每 tick 重复记录', () => {
   const active = events.filter((e) => e.event === 'interrupt_active');
   assert.ok(active.length <= 2, `20 个 tick 内 interrupt_active 不应重复刷屏，实际 ${active.length}`);
 });
+
+test('能识别燃烧的实体（metadata key 0 bit 0）', () => {
+  const { perceive } = require('../src/body/perception');
+  const bot = {
+    entity: { position: vec3(0, 64, 0), velocity: vec3(0, 0, 0), onGround: true, metadata: { 0: 0x01 } },
+    health: 20,
+    food: 20,
+    isSleeping: false,
+    players: {},
+    entities: {
+      1: { id: 1, name: 'zombie', position: vec3(2, 64, 0), metadata: { 0: 0x01 } },
+      2: { id: 2, name: 'zombie', position: vec3(3, 64, 0), metadata: { 0: 0x00 } },
+    },
+    time: { timeOfDay: 6000 },
+    game: { dimension: 'overworld' },
+    inventory: { items: () => [], emptySlotCount: () => 36, slots: [] },
+    blockAt: () => ({ name: 'grass_block', boundingBox: 'block', light: 15, biome: { name: 'plains' } }),
+    registry: { itemsByName: {}, foodsByName: {} },
+  };
+  const p = perceive(bot, { ready: true, now: Date.now() });
+  const burning = p.threats.find((t) => t.id === 1);
+  const normal = p.threats.find((t) => t.id === 2);
+  assert.equal(burning.onFire, true, '燃烧的僵尸应标记 onFire');
+  assert.equal(normal.onFire, false, '正常僵尸不应标记 onFire');
+  assert.equal(p.self.onFire, true, '玩家自身着火也要能被识别');
+});
+
+test('燃烧的威胁评分更高', () => {
+  const combat = require('../src/skills/combat');
+  const ctx = { hp: 20, armor: 0, hostileCount: 1, light: 15 };
+  const normal = combat.threatScore({ type: 'zombie', dist: 2, onFire: false }, ctx);
+  const burning = combat.threatScore({ type: 'zombie', dist: 2, onFire: true }, ctx);
+  assert.ok(burning > normal, `燃烧僵尸应更危险：${burning} vs ${normal}`);
+});
+
+test('自己着火时 fire 反射会优先找水', async () => {
+  const { createFireReflex } = require('../src/body/interrupts');
+  const move = require('../src/skills/move');
+
+  const bot = {
+    entity: { position: vec3(0, 64, 0), isInWater: false },
+    pathfinder: { setGoal() {} },
+  };
+  const originalFind = move.findNearestBlock;
+  const originalMoveTo = move.moveTo;
+  const waterBlock = { name: 'water', position: vec3(5, 64, 5) };
+  let movedTo = null;
+  move.findNearestBlock = () => waterBlock;
+  move.moveTo = async (b, target) => { movedTo = target; return { ok: true }; };
+
+  try {
+    const reflex = createFireReflex({});
+    const perception = { self: { onFire: true }, threats: [] };
+    const ctx = { now: 1000, bot, perception, shadow: false, record: () => {} };
+    assert.equal(reflex.condition(perception, ctx), true);
+    const result = reflex.run(ctx);
+    if (result && result.then) await result;
+    assert.ok(movedTo, '应该朝水源移动');
+    assert.equal(movedTo.x, 5);
+  } finally {
+    move.findNearestBlock = originalFind;
+    move.moveTo = originalMoveTo;
+  }
+});

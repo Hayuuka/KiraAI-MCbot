@@ -146,6 +146,14 @@ const DEFAULTS = {
         moveTimeoutMs: 6000,
         cooldownMs: 1000,
       },
+      fire: {
+        // 自己着火：先找水，找不到就跑开。燃烧的僵尸贴上来会点燃玩家。
+        waterSearchRadius: 16,
+        searchRadius: 12,
+        fleeDistance: 10,
+        moveTimeoutMs: 5000,
+        cooldownMs: 800,
+      },
     },
     combat: {
       fleePowerRatio: 1.3,

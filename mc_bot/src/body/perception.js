@@ -56,6 +56,27 @@ function entityType(entity) {
   return bareName(entity && (entity.name || entity.type || entity.displayName));
 }
 
+/**
+ * 实体是否在燃烧。
+ *
+ * mineflayer 4.39 不暴露 isOnFire，火焰标志在实体 metadata 的
+ * 共享标志位（key 0）的 bit 0。1.21 起所有实体共用这一组标志。
+ *
+ * 这不是特效：贴着燃烧的僵尸会把自己也点着。
+ */
+function isBurning(entity) {
+  if (!entity) return false;
+  if (entity.isOnFire === true || entity.onFire === true) return true;
+  const meta = entity.metadata;
+  if (!meta) return false;
+  let flags = null;
+  if (Array.isArray(meta)) flags = meta[0];
+  else if (typeof meta === 'object') flags = meta[0];
+  const value = Number(flags);
+  if (!Number.isFinite(value)) return false;
+  return (value & 0x01) !== 0;
+}
+
 function positionOf(entity) {
   const position = entity && entity.position;
   if (!position) return null;
@@ -226,6 +247,7 @@ function nearbyEntities(bot, origin, config) {
           hp: numberOrNull(entity.health),
           aggressive: null,
           lineOfSight: null,
+          onFire: isBurning(entity),
         });
       }
     } else if (type === 'item' || type === 'item_stack') {
@@ -302,6 +324,7 @@ function selfSnapshot(bot, position, armor) {
     onGround: Boolean(entity && entity.onGround),
     inWater: Boolean(entity && entity.isInWater),
     inLava: Boolean(entity && entity.isInLava),
+    onFire: isBurning(entity),
     isSleeping: Boolean(bot && bot.isSleeping),
     y: position ? round1(position.y) : null,
     light: numberOrNull(positionBlock && positionBlock.light),
