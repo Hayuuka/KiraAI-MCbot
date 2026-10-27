@@ -114,7 +114,8 @@ class GotoTask extends Task {
     }
     if (this.pending) return;
     const position = ctx.bot && ctx.bot.entity && ctx.bot.entity.position;
-    const y = Number.isFinite(this.args.y) ? this.args.y : position && position.y;
+    const horizontalOnly = !Number.isFinite(this.args.y);
+    const y = horizontalOnly ? position && position.y : this.args.y;
     if (!Number.isFinite(y)) {
       this.fail(FAILURE_REASONS.INVALID_ARGS);
       return;
@@ -125,6 +126,7 @@ class GotoTask extends Task {
       {
         range: this.settings.arriveRange,
         timeoutMs: this.settings.moveTimeoutMs,
+        horizontalOnly,
       }
     ));
   }

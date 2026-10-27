@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vec3 = require('vec3');
+const minecraftData = require('minecraft-data')('1.21.1');
 
 const { createBrain } = require('../src/body/brain');
 const { perceive } = require('../src/body/perception');
@@ -23,6 +24,7 @@ function makeBot(options = {}) {
     food: options.food ?? 10,
     time: { timeOfDay: 6000 },
     game: { dimension: 'minecraft:overworld' },
+    registry: options.registry || minecraftData,
     isSleeping: false,
     entity: {
       position: state.position,
@@ -40,7 +42,10 @@ function makeBot(options = {}) {
       emptySlotCount: () => 20,
     },
     pathfinder: {
-      setGoal() {},
+      setGoal(goal) {
+        if (typeof options.onGoal === 'function') options.onGoal(goal, bot);
+      },
+      setMovements() {},
       isMoving() { return false; },
     },
     blockAt() { return { name: 'air', boundingBox: 'empty', light: 15 }; },
@@ -368,4 +373,45 @@ test('反射打断 30 秒后，任务 elapsedSec 是否跳过了这 30 秒', () 
   const after = task.elapsedSec({ ...ctx, now: 41000 });
   assert.ok(Math.abs(after - 10) < 1);
   assert.ok(brain);
+});
+
+test('goto 的目标 y 与实际地形差 3 格时能否判定到达', async () => {
+  const goals = [];
+  const bot = makeBot({
+    onGoal(goal, currentBot) {
+      goals.push(goal);
+      if (goal) currentBot.entity.position = vec3(goal.x, 67, goal.z);
+    },
+  });
+  const brain = createBrain({
+    config: { brain: { shadowMode: false, tickMs: 100, arbiterMs: 500 } },
+    connection: { getBot: () => bot, isReady: () => true },
+    log: { warn() {}, log() {} },
+    record() {},
+  });
+  const task = new GotoTask({ x: 5, y: null, z: 0, tolerance: 1 }, { source: 'local', priority: 30 });
+  const ctx = {
+    bot,
+    now: 1000,
+    shadow: false,
+    config: brain.config,
+    agenda: brain.agenda,
+    tasks: brain.tasks,
+    drives: brain.drives,
+    watchdog: brain.watchdog,
+    perception: makePerception(bot),
+    record() {},
+  };
+
+  assert.equal(task.isDone(ctx), false);
+  task.tick(ctx);
+  const pathGoal = goals.find(Boolean);
+  assert.ok(pathGoal);
+  assert.equal(pathGoal.constructor.name, 'GoalXZ');
+  assert.equal(bot.entity.position.y, 67);
+  assert.equal(task.isDone(ctx), true);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  task.tick({ ...ctx, now: 1100 });
+  assert.equal(task.state, 'done');
 });
