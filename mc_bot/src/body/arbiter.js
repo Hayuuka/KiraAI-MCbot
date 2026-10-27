@@ -1,5 +1,12 @@
 'use strict';
 
+const inventorySkill = require('../skills/inventory');
+const moveSkill = require('../skills/move');
+
+const PICKAXES = Object.freeze([
+  'stone_pickaxe', 'iron_pickaxe', 'golden_pickaxe', 'diamond_pickaxe', 'netherite_pickaxe',
+]);
+
 const DRIVE_TASKS = Object.freeze({
   night: [
     { kind: 'sleep', priority: 60 },
@@ -100,6 +107,78 @@ class Arbiter {
       const night = this._chooseNight(ctx);
       if (night) return night;
       return idle('night_no_option:sleep=no_bed,shelter=no_material_or_wall,digIn=no_solid_ground');
+    }
+
+    const canWork = perception.world.isDay !== false ||
+      perception.world.underground === true ||
+      local.workAtNight === true;
+    const hasStonePick = PICKAXES.some((name) => inventorySkill.count(ctx.bot, name) > 0);
+    const stone = canWork
+      ? moveSkill.findNearestBlock(ctx.bot, '#minecraft:stone', local.miningSearchRadius || 32)
+      : null;
+
+    if (canWork && !hasStonePick && stone) {
+      const CollectTask = this.tasks && this.tasks.get ? this.tasks.get('collectBlock') : null;
+      const spec = CollectTask
+        ? CollectTask.feasible({
+          ...ctx,
+          args: { selector: '#minecraft:stone', count: 3, radius: local.miningSearchRadius || 32 },
+        })
+        : null;
+      if (spec) {
+        return {
+          kind: 'collectBlock',
+          args: spec.args,
+          priority: local.collectPriority,
+          reason: 'stone_tool_upgrade',
+          note: spec.note || '收集石头制作石镐',
+        };
+      }
+    }
+
+    const y = Number(perception.self.pos && perception.self.pos.y);
+    if (
+      canWork &&
+      hasStonePick &&
+      inventorySkill.count(ctx.bot, 'iron_ingot') <= 0 &&
+      y >= 60
+    ) {
+      const MineOreTask = this.tasks && this.tasks.get ? this.tasks.get('mineOre') : null;
+      const spec = MineOreTask
+        ? MineOreTask.feasible({ ...ctx, args: { ore: 'iron_ore' } })
+        : null;
+      if (spec) {
+        return {
+          kind: 'mineOre',
+          args: spec.args,
+          priority: local.miningPriority || 45,
+          reason: 'iron_supply',
+          note: spec.note || '挖铁矿',
+        };
+      }
+    }
+
+    const freeSlots = Number(perception.inventory && perception.inventory.freeSlots);
+    if (
+      canWork &&
+      perception.world.isDay === true &&
+      perception.world.underground !== true &&
+      Number.isFinite(freeSlots) &&
+      freeSlots >= 30
+    ) {
+      const DigDownTask = this.tasks && this.tasks.get ? this.tasks.get('digDown') : null;
+      const spec = DigDownTask
+        ? DigDownTask.feasible({ ...ctx, args: { depth: 10 } })
+        : null;
+      if (spec) {
+        return {
+          kind: 'digDown',
+          args: spec.args,
+          priority: local.miningPriority || 45,
+          reason: 'surface_mining',
+          note: spec.note || '阶梯式向下探索',
+        };
+      }
     }
 
     const candidates = this.tasks.available(ctx, this._taskDefaults());

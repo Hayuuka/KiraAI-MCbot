@@ -254,15 +254,25 @@ function makeVec3(bot, value) {
   return new Vec3(Number(value.x), Number(value.y), Number(value.z));
 }
 
-function ensureMovements(bot) {
+function ensureMovements(bot, options = {}) {
   if (!bot.pathfinder) throw new Error('pathfinder is not loaded');
-  if (!bot._mcMovements) {
+  const canDig = options.canDig === true;
+  const digCost = Math.max(1, Math.trunc(Number(options.digCost) || 30));
+  const allow1by1towers = canDig ? false : options.allow1by1towers === true;
+  const key = `dig:${canDig}:cost:${digCost}:tower:${allow1by1towers}`;
+  if (!(bot._mcMovementsMap instanceof Map)) bot._mcMovementsMap = new Map();
+  if (!bot._mcMovementsMap.has(key)) {
     const movements = new Movements(bot);
-    movements.canDig = false;
-    bot._mcMovements = movements;
+    movements.canDig = canDig;
+    movements.digCost = digCost;
+    movements.allow1by1towers = allow1by1towers;
+    movements.dontMineUnderFallingBlock = true;
+    movements.dontCreateFlow = true;
+    bot._mcMovementsMap.set(key, movements);
   }
-  bot.pathfinder.setMovements(bot._mcMovements);
-  return bot._mcMovements;
+  const movements = bot._mcMovementsMap.get(key);
+  bot.pathfinder.setMovements(movements);
+  return movements;
 }
 
 async function moveTo(bot, target, options = {}) {
@@ -275,7 +285,7 @@ async function moveTo(bot, target, options = {}) {
     const timeoutMs = Math.max(1000, Math.min(30000, Number(options.timeoutMs) || 10000));
     const horizontalOnly = options.horizontalOnly === true;
     const destination = makeVec3(bot, resolved.position);
-    ensureMovements(bot);
+    ensureMovements(bot, options);
 
     const goal = horizontalOnly
       ? new goals.GoalXZ(destination.x, destination.z)
@@ -351,6 +361,7 @@ module.exports = {
   moveTo,
   stopMove,
   resolveTarget,
+  ensureMovements,
   findNearestBlock,
   expandBlockTarget,
   BLOCK_TAGS,

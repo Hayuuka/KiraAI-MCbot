@@ -8,6 +8,7 @@ const guard = require('./guard');
 const world = require('./world');
 const place = require('./place');
 const combat = require('./combat');
+const mining = require('./mining');
 
 module.exports = {
   move,
@@ -18,6 +19,7 @@ module.exports = {
   world,
   place,
   combat,
+  mining,
   ...move,
   followTick: follow.followTick,
   startFollow: follow.startFollow,
