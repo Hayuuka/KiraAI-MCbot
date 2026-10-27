@@ -85,6 +85,11 @@ class Brain {
     this.connection = options.connection || {};
     this.legacy = options.legacy || null;
     this.mind = options.mind || null;
+    this.projects = options.projects || null;
+    this.diary = options.diary || null;
+    this.human = options.human || null;
+    this.voice = options.voice || null;
+    this._lastContext = null;
     this.log = options.log || console;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.tasks = options.tasks || taskRegistry;
@@ -203,6 +208,7 @@ class Brain {
     }
 
     const ctx = this._context(now, bot);
+    this._lastContext = ctx;
     const active = this.interrupts.evaluate(perception, ctx);
     if (active) {
       const before = this.agenda.top();
@@ -269,6 +275,27 @@ class Brain {
       }
     }
 
+    if (this.human && typeof this.human.update === 'function') {
+      try {
+        this.human.update(ctx);
+      } catch (error) {
+        this._record('brain_error', {
+          stage: 'human',
+          message: error && error.message ? error.message : String(error),
+        });
+      }
+    }
+    if (this.voice && typeof this.voice.tick === 'function') {
+      try {
+        this.voice.tick(ctx);
+      } catch (error) {
+        this._record('brain_error', {
+          stage: 'voice',
+          message: error && error.message ? error.message : String(error),
+        });
+      }
+    }
+
     return this.snapshot();
   }
 
@@ -290,6 +317,9 @@ class Brain {
       interrupts: this.interrupts.snapshot(),
       watchdog: this.watchdog.snapshot({ agenda: this.agenda, now: this.now() }),
       mind: this.mind && typeof this.mind.snapshot === 'function' ? this.mind.snapshot() : null,
+      project: this.projects && typeof this.projects.snapshot === 'function' ? this.projects.snapshot() : null,
+      human: this.human && typeof this.human.snapshot === 'function' ? this.human.snapshot() : null,
+      voice: this.voice && typeof this.voice.snapshot === 'function' ? this.voice.snapshot() : null,
       stats: { ...this.stats },
     };
   }
@@ -446,6 +476,27 @@ class Brain {
         this.mind.observeAgendaEvent(event, payload || {});
       } catch (_) {
         // 观察失败不能影响任务栈。
+      }
+    }
+    if (event === 'agenda_settle' && this.projects && typeof this.projects.recordOutcome === 'function') {
+      try {
+        this.projects.recordOutcome(payload && payload.task, payload && payload.outcome);
+      } catch (_) {
+        // 项目存档失败不能影响任务栈。
+      }
+    }
+    if (event === 'agenda_settle' && this.diary && typeof this.diary.record === 'function') {
+      try {
+        this.diary.record(payload || {}, this._lastContext);
+      } catch (_) {
+        // 日记失败不能影响任务栈。
+      }
+    }
+    if (this.voice && typeof this.voice.onAgendaEvent === 'function') {
+      try {
+        this.voice.onAgendaEvent(event, payload || {}, this._lastContext);
+      } catch (_) {
+        // 台词失败不能影响任务栈。
       }
     }
     this._record(event, payload || {});

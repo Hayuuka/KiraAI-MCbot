@@ -14,6 +14,8 @@ const { AssistTask } = require('./assist');
 const { DigInTask } = require('./digIn');
 const { DigDownTask } = require('./digDown');
 const { MineOreTask } = require('./mineOre');
+const { CraftTask } = require('./craft');
+const { BuildTask } = require('./build');
 
 const registry = new Map();
 
@@ -79,6 +81,8 @@ register(AssistTask);
 register(DigInTask);
 register(DigDownTask);
 register(MineOreTask);
+register(CraftTask);
+register(BuildTask);
 
 module.exports = {
   register,
@@ -101,4 +105,6 @@ module.exports = {
   DigInTask,
   DigDownTask,
   MineOreTask,
+  CraftTask,
+  BuildTask,
 };

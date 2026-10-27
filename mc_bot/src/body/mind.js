@@ -312,6 +312,9 @@ class Mind {
       state: top.state,
       progress: this._progressOf(top, ctx),
     } : null;
+    const project = this.brain && this.brain.projects && typeof this.brain.projects.snapshot === 'function'
+      ? this.brain.projects.snapshot()
+      : null;
     const situation = {
       hp: self.hp,
       food: self.food,
@@ -326,7 +329,7 @@ class Mind {
         : [],
       doing,
       lastResult: this._lastResult,
-      project: null,
+      project,
       can: can.map((entry) => ({
         do: entry.kind,
         args: entry.args,

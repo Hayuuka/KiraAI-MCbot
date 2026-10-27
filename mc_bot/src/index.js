@@ -11,6 +11,10 @@ const { createLink } = require('./link');
 const { createIntentRunner } = require('./intent');
 const { createBrain } = require('./body/brain');
 const { createMind } = require('./body/mind');
+const { createProjectManager } = require('./body/projects');
+const { createDiary } = require('./body/diary');
+const { createHumanizer } = require('./body/human');
+const { createVoice } = require('./body/voice');
 
 function formatEvent(event) {
   if (!event || !event.data) return '';
@@ -25,6 +29,7 @@ function createRuntime(options = {}) {
   const log = options.log || console;
   let link = null;
   let mind = null;
+  let diary = null;
 
   const eventHub = createEventHub({
     config,
@@ -94,6 +99,7 @@ function createRuntime(options = {}) {
         return;
       }
       if (mind) mind.requestWake('death');
+      if (diary && typeof diary.recordDeath === 'function') diary.recordDeath();
     },
   });
 
@@ -106,6 +112,21 @@ function createRuntime(options = {}) {
     link,
     config: config.brain && config.brain.mind,
     log,
+  });
+  const dataDir = path.join(__dirname, '..', 'data');
+  const projects = createProjectManager({
+    file: path.join(dataDir, 'projects.json'),
+    log,
+  });
+  diary = createDiary({
+    file: path.join(dataDir, 'diary.jsonl'),
+    log,
+  });
+  const human = createHumanizer({ config: config.brain && config.brain.human });
+  const voice = createVoice({
+    eventHub,
+    connection,
+    config: config.brain && config.brain.voice,
   });
 
   const intent = createIntentRunner({
@@ -132,6 +153,10 @@ function createRuntime(options = {}) {
     connection,
     legacy: autonomy,
     mind,
+    projects,
+    diary,
+    human,
+    voice,
     log,
     recordDir: path.join(__dirname, '..', 'logs'),
   });
@@ -172,6 +197,10 @@ function createRuntime(options = {}) {
     link,
     intent,
     mind,
+    projects,
+    diary,
+    human,
+    voice,
     brain,
     start() {
       autonomy.start();

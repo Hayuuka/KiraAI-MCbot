@@ -49,6 +49,19 @@ const DEFAULTS = {
       taskFailureWakeMinMs: 60000,
       maxCan: 6,
     },
+    human: {
+      lookMinMs: 3000,
+      lookMaxMs: 6000,
+      actionMinMs: 20000,
+      actionMaxMs: 40000,
+      delayMinMs: 80,
+      delayMaxMs: 220,
+      maxTurnPerTick: 0.4363,
+    },
+    voice: {
+      cooldownMs: 60000,
+      perKeyCooldownMs: 300000,
+    },
     agenda: {
       maxDepth: 12,
       defaultLeaseMs: 600000,
@@ -193,6 +206,20 @@ const DEFAULTS = {
         arriveRange: 2,
         reach: 4.5,
         probeDepth: 4,
+      },
+      craft: {
+        item: 'oak_planks',
+        count: 4,
+        maxMinutes: 3,
+        maxAttempts: 4,
+        tableSearchRadius: 8,
+      },
+      build: {
+        blueprint: '3x3x3',
+        maxMinutes: 10,
+        maxAttempts: 3,
+        reach: 4.5,
+        moveTimeoutMs: 8000,
       },
       eat: {
         untilFood: 18,

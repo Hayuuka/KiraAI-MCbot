@@ -32,6 +32,27 @@ function blockName(block) {
   return String(block && block.name ? block.name : '').toLowerCase().split(':').pop();
 }
 
+function findPlacementSupport(bot, target, mode = 'below') {
+  const candidates = [];
+  if (mode === 'any') {
+    candidates.push(
+      { x: target.x, y: target.y - 1, z: target.z, face: [0, 1, 0] },
+      { x: target.x + 1, y: target.y, z: target.z, face: [-1, 0, 0] },
+      { x: target.x - 1, y: target.y, z: target.z, face: [1, 0, 0] },
+      { x: target.x, y: target.y, z: target.z + 1, face: [0, 0, -1] },
+      { x: target.x, y: target.y, z: target.z - 1, face: [0, 0, 1] },
+      { x: target.x, y: target.y + 1, z: target.z, face: [0, -1, 0] }
+    );
+  } else {
+    candidates.push({ x: target.x, y: target.y - 1, z: target.z, face: [0, 1, 0] });
+  }
+  for (const candidate of candidates) {
+    const block = world.blockAt(bot, candidate.x, candidate.y, candidate.z);
+    if (world.isSolid(block)) return { block, face: candidate.face };
+  }
+  return null;
+}
+
 function positionOf(position) {
   if (!position) return null;
   const x = Math.floor(Number(position.x));
@@ -51,12 +72,20 @@ async function placeItemAt(bot, itemName, targetPosition, options = {}) {
 
     const targetBlock = world.blockAt(bot, target.x, target.y, target.z);
     if (!world.isAir(targetBlock)) return { ok: false, error: 'target is not empty' };
-    const support = world.blockAt(bot, target.x, target.y - 1, target.z);
-    if (!world.isSolid(support)) return { ok: false, error: 'no supporting block below target' };
+    const supportInfo = findPlacementSupport(bot, target, options.supportMode);
+    if (!supportInfo) {
+      return {
+        ok: false,
+        error: options.supportMode === 'any'
+          ? 'no adjacent supporting block'
+          : 'no supporting block below target',
+      };
+    }
+    const support = supportInfo.block;
 
     await bot.equip(item, 'hand');
     const Vec3 = bot.entity.position.constructor;
-    const face = new Vec3(0, 1, 0);
+    const face = new Vec3(supportInfo.face[0], supportInfo.face[1], supportInfo.face[2]);
     await withTimeout(
       bot.placeBlock(support, face),
       Math.max(1000, Number(options.timeoutMs) || 5000),
@@ -118,6 +147,7 @@ async function placeTorchAt(bot, targetPosition, options = {}) {
 module.exports = {
   BUILDING_BLOCKS,
   placeItemAt,
+  findPlacementSupport,
   placeBedAt,
   placeBuildingBlockAt,
   placeTorchAt,
