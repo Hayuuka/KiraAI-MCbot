@@ -83,3 +83,83 @@ test('digBlockSafely 拒绝挖开旁边就是岩浆的方块', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.hazard, 'lava');
 });
+
+test('实战模式下 mc_stop 会清空新行为层的任务栈', () => {
+  const { loadConfig } = require('../src/config');
+  const { createRuntime } = require('../src/index');
+  const tasks = require('../src/tasks');
+
+  const config = loadConfig();
+  const runtime = createRuntime({ config, log: { log() {}, warn() {}, info() {} } });
+  const task = tasks.create('goto', { x: 100, y: 64, z: 100 }, { source: 'local', priority: 30 });
+  runtime.brain.agenda.push(task, { now: Date.now(), leaseMs: null });
+  assert.equal(runtime.brain.agenda.size, 1);
+
+  const result = runtime.actions.stop();
+  assert.equal(result.ok, true);
+  assert.equal(runtime.brain.agenda.size, 0);
+  runtime.stop();
+});
+
+test('brain.stopAll 停掉动作但保持行为层运行', () => {
+  const { createBrain } = require('../src/body/brain');
+  const tasks = require('../src/tasks');
+  const { loadConfig } = require('../src/config');
+
+  let cleared = 0;
+  const bot = {
+    entity: { position: vec3(0, 64, 0) },
+    pathfinder: { setGoal: () => {} },
+    clearControlStates: () => { cleared += 1; },
+    stopDigging: () => {},
+  };
+  const brain = createBrain({
+    config: loadConfig(),
+    connection: { getBot: () => bot, isReady: () => true },
+    log: { log() {}, warn() {} },
+    record: () => {},
+  });
+  brain.running = true;
+  brain.agenda.push(
+    tasks.create('goto', { x: 5, y: 64, z: 5 }, { source: 'local', priority: 30 }),
+    { now: 0, leaseMs: null },
+  );
+
+  brain.stopAll('test');
+  assert.equal(brain.agenda.size, 0);
+  assert.equal(cleared, 1);
+  assert.equal(brain.running, true, '停下不等于关闭行为层');
+});
+
+test('实战模式下 mc_follow 会创建 follow 任务', () => {
+  const { loadConfig } = require('../src/config');
+  const { createRuntime } = require('../src/index');
+
+  const config = loadConfig();
+  const runtime = createRuntime({ config, log: { log() {}, warn() {}, info() {} } });
+  const player = { username: 'Hayuuka', entity: { position: vec3(3, 64, 0) } };
+  const fakeBot = {
+    username: 'ChuXiaoxue',
+    entity: { position: vec3(0, 64, 0) },
+    players: { Hayuuka: player },
+    pathfinder: { setGoal() {}, isMoving: () => false },
+    inventory: { items: () => [], slots: Array(46).fill(null) },
+    time: { timeOfDay: 6000 },
+    game: { dimension: 'overworld' },
+    health: 20,
+    food: 20,
+    registry: { itemsByName: {}, blocksByName: {}, foodsByName: {} },
+    on() {},
+    setControlState() {},
+    clearControlStates() {},
+    blockAt: () => ({ name: 'air', boundingBox: 'empty', light: 15 }),
+  };
+  runtime.connection.getBot = () => fakeBot;
+  runtime.connection.isReady = () => true;
+
+  const result = runtime.actions.follow({ player: 'Hayuuka' });
+  assert.equal(result.ok, true);
+  assert.equal(result.source, 'brain');
+  assert.equal(runtime.brain.agenda.top().kind, 'follow');
+  runtime.stop();
+});

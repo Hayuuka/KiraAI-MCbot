@@ -177,6 +177,28 @@ class Brain {
     return true;
   }
 
+  /**
+   * 用户要求"停下"：清空任务栈并停掉当前动作，但行为层继续运行。
+   * 与 stop() 的区别是停下后她仍能响应新指令，反射也仍然工作
+   * （撞到岩浆还是会跑）。
+   */
+  stopAll(reason = 'user_stop') {
+    const bot = this._getBot();
+    if (this.agenda) this.agenda.clear(FAILURE_REASONS.CANCELLED);
+    if (bot) {
+      try {
+        if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') bot.pathfinder.setGoal(null);
+        if (typeof bot.clearControlStates === 'function') bot.clearControlStates();
+        if (typeof bot.stopDigging === 'function') bot.stopDigging();
+      } catch (_) {
+        // 断线时控制状态可能已清空
+      }
+    }
+    this._record('brain_stop_all', { reason });
+    this._log('用户要求停下，任务栈已清空');
+    return true;
+  }
+
   tick() {
     if (!this.running) return null;
     const now = this.now();

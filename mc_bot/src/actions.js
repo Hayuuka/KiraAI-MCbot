@@ -80,6 +80,8 @@ function createActions(options = {}) {
   // intent 在 actions 之后才创建（它依赖 link），所以用可变引用，稍后注入
   let intent = options.intent || null;
   let mind = options.mind || null;
+  // brain 也在 actions 之后创建，同样用可变引用
+  let brain = options.brain || null;
   const log = options.log || console;
   let auditReady = false;
 
@@ -487,6 +489,16 @@ function createActions(options = {}) {
       if (!skills.follow.isPlayerVisible(ready.bot, name)) {
         return { ok: false, error: 'player not visible: ' + name };
       }
+      // 实战模式下旧 autonomy 没有启动，setMode 虽然返回 ok 但什么也不会做。
+      // 走新行为层的 follow 任务，再回落到旧 autonomy / 裸技能。
+      if (brain && brain.agenda && typeof brain.agenda.push === 'function') {
+        const TaskClass = brain.tasks && brain.tasks.get ? brain.tasks.get('follow') : null;
+        if (TaskClass) {
+          const task = new TaskClass({ player: name }, { source: 'user', priority: 70 });
+          brain.agenda.push(task, { now: Date.now(), leaseMs: 600000 });
+          return { ok: true, mode: 'follow', player: name, source: 'brain' };
+        }
+      }
       if (autonomy && typeof autonomy.setMode === 'function') {
         const result = autonomy.setMode('follow', { player: name });
         if (!result || !result.ok) return result || { ok: false, error: 'could not start follow' };
@@ -503,6 +515,14 @@ function createActions(options = {}) {
   function stop() {
     try {
       const bot = getBot();
+      // 新行为层接管时，旧 autonomy 没有启动，清空 agenda 才是真正的"停下"。
+      if (brain && typeof brain.stopAll === 'function') {
+        try {
+          brain.stopAll('user_stop');
+        } catch (error) {
+          return { ok: false, error: 'could not stop brain: ' + errorText(error) };
+        }
+      }
       if (autonomy && typeof autonomy.setMode === 'function') {
         try {
           autonomy.setMode('idle');
@@ -700,10 +720,15 @@ function createActions(options = {}) {
     mind = runner;
   }
 
+  function attachBrain(runner) {
+    brain = runner;
+  }
+
   return {
     ...handlers,
     attachIntent,
     attachMind,
+    attachBrain,
     invoke,
     handlers,
     toolNames: Object.keys(handlers),

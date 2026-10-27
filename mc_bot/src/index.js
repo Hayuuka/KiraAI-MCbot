@@ -170,6 +170,10 @@ function createRuntime(options = {}) {
   if (actions && typeof actions.attachMind === 'function') {
     actions.attachMind(mind);
   }
+  // mc_stop 在实战模式下要能真正清空新行为层的任务栈
+  if (actions && typeof actions.attachBrain === 'function') {
+    actions.attachBrain(brain);
+  }
 
   // 手动指令（用户下的话）优先于自动计划。
   // 关键：模型响应 intent 时自己调 mc_mode，那不是"人工指令"，不能被标记成 manual

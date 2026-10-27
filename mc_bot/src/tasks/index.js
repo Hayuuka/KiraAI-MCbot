@@ -11,6 +11,7 @@ const { ShelterTask } = require('./shelter');
 const { FightTask } = require('./fight');
 const { GuardTask } = require('./guard');
 const { AssistTask } = require('./assist');
+const { FollowTask } = require('./follow');
 const { DigInTask } = require('./digIn');
 const { DigDownTask } = require('./digDown');
 const { MineOreTask } = require('./mineOre');
@@ -78,6 +79,7 @@ register(ShelterTask);
 register(FightTask);
 register(GuardTask);
 register(AssistTask);
+register(FollowTask);
 register(DigInTask);
 register(DigDownTask);
 register(MineOreTask);
@@ -102,6 +104,7 @@ module.exports = {
   FightTask,
   GuardTask,
   AssistTask,
+  FollowTask,
   DigInTask,
   DigDownTask,
   MineOreTask,
