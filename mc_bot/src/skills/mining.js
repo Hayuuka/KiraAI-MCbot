@@ -45,6 +45,9 @@ function isSolid(block) {
 /**
  * 查看 position 下方连续方块的第一个危险。
  * position 本身不检查，从 y - 1 开始逐格向下。
+ *
+ * 除了正下方，还要查**相邻格**：挖开一格后岩浆会从侧面流进来，
+ * 只看正下方会漏掉"脚下是石头、旁边是岩浆"的情况。
  */
 function probeBelow(bot, position, depth = 4) {
   const start = positionOf(position);
@@ -52,6 +55,11 @@ function probeBelow(bot, position, depth = 4) {
   const limit = Math.max(1, Math.min(32, Math.trunc(Number(depth) || 4)));
   let airRun = 0;
   let lastName = null;
+
+  // 目标自身那一层：挖开它之后，相邻格的液体会直接灌进来。
+  // （digDown 传的是落点、digBlockSafely 传的是要挖的方块，两种用法都要覆盖。）
+  const ownSide = adjacentLiquid(bot, start.x, start.y, start.z);
+  if (ownSide) return { ok: false, hazard: ownSide, blockName: bareName((blockAt(bot, start) || {}).name) };
 
   for (let offset = 1; offset <= limit; offset += 1) {
     const block = blockAt(bot, { x: start.x, y: start.y - offset, z: start.z });
@@ -67,6 +75,11 @@ function probeBelow(bot, position, depth = 4) {
     if (name === 'bedrock') {
       return { ok: false, hazard: 'bedrock', blockName: name };
     }
+
+    // 下方每一格也要查侧向：挖开后侧面可能被灌
+    const side = adjacentLiquid(bot, start.x, start.y - offset, start.z);
+    if (side) return { ok: false, hazard: side, blockName: name };
+
     if (isAir(block)) {
       airRun += 1;
       if (airRun >= 3) return { ok: false, hazard: 'fall', blockName: name };
@@ -76,6 +89,19 @@ function probeBelow(bot, position, depth = 4) {
   }
 
   return { ok: true, hazard: null, blockName: lastName };
+}
+
+/** 检查 (x,y,z) 四个水平相邻格里有没有液体，返回液体类型或 null。 */
+function adjacentLiquid(bot, x, y, z) {
+  const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [dx, dz] of offsets) {
+    const block = blockAt(bot, { x: x + dx, y, z: z + dz });
+    if (!block) continue;
+    const name = bareName(block.name);
+    if (name === 'lava' || name === 'flowing_lava') return 'lava';
+    if (name === 'water' || name === 'flowing_water') return 'water';
+  }
+  return null;
 }
 
 async function digBlockSafely(bot, block, options = {}) {

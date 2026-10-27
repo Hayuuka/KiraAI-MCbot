@@ -203,8 +203,16 @@ function createRuntime(options = {}) {
     voice,
     brain,
     start() {
-      autonomy.start();
-      intent.start();
+      // shadow 模式：旧状态机执行、新行为层只观察。
+      // 非 shadow 模式：新行为层接管，旧状态机和旧调度必须停掉——
+      // 否则两边会同时 setControlState / moveTo，互相打断，比任何单边都糟。
+      const shadow = brain.shadowMode !== false;
+      if (shadow) {
+        autonomy.start();
+        intent.start();
+      } else {
+        log.log('[mc_bot] 新行为层接管（shadowMode=false），旧 autonomy/intent 不启动');
+      }
       link.start();
       connection.start();
       brain.start();
