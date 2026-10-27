@@ -251,6 +251,24 @@ test('高优先级任务结束后，被暂停的任务恢复', () => {
   assert.equal(goto.state, 'running');
 });
 
+test('战斗需求能抢占低优先级本地任务', () => {
+  const { bot, brain, ctx } = setupArbiterThreat({
+    id: 2,
+    type: 'zombie',
+    dist: 5,
+    threat: 2,
+    canWin: true,
+  });
+  const goto = new GotoTask({ x: 10, z: 0, tolerance: 2 }, { source: 'local', priority: 30 });
+  brain.agenda.push(goto, { now: ctx.now, leaseMs: null });
+  goto.tick(ctx);
+  assert.equal(bot.entity.position.y, 64);
+
+  brain._arbitrate(ctx);
+  assert.equal(brain.agenda.top().kind, 'fight');
+  assert.equal(goto.state, 'paused');
+});
+
 test('本地 collectBlock 任务能否活过 localLeaseMs', () => {
   const { brain, ctx } = setupCollectLease();
   const task = brain._arbitrate(ctx);

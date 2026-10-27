@@ -21,7 +21,6 @@ class Arbiter {
     if (!ctx) return null;
     const driveChoice = this._chooseDrive(ctx);
     if (driveChoice) return driveChoice;
-    if (ctx.agenda && ctx.agenda.top()) return null;
     return this._chooseLocal(ctx);
   }
 
