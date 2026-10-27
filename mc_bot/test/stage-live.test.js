@@ -163,3 +163,112 @@ test('实战模式下 mc_follow 会创建 follow 任务', () => {
   assert.equal(runtime.brain.agenda.top().kind, 'follow');
   runtime.stop();
 });
+
+test('被连续攻击时 hurt 反射按武器冷却持续反击，不是冷却期干站着', async () => {
+  const { createHurtReflex } = require('../src/body/interrupts');
+
+  let attacks = 0;
+  const zombie = { id: 1, name: 'zombie', position: vec3(2, 64, 0), health: 20 };
+  const bot = {
+    entity: { position: vec3(0, 64, 0) },
+    entities: { 1: zombie },
+    heldItem: { name: 'iron_sword' },
+    inventory: {
+      items: () => [{ name: 'iron_sword', type: 1, count: 1, slot: 36 }],
+      slots: Array(46).fill(null),
+    },
+    pathfinder: { setGoal() {} },
+    attack: () => { attacks += 1; },
+    lookAt: async () => {},
+    equip: async () => {},
+    registry: {},
+  };
+  const reflex = createHurtReflex({
+    counterMinHp: 12,
+    counterRadius: 4,
+    swingCooldownMs: 650,
+    cooldownMs: 250,
+  });
+  const perception = { self: { hp: 20 }, threats: [{ id: 1, type: 'zombie', dist: 2 }] };
+
+  let t = 100000;
+  for (let i = 0; i < 30; i += 1) {
+    t += 100;
+    const ctx = { now: t, bot, perception, lastHurtAt: t, shadow: false, record: () => {} };
+    if (reflex.condition(perception, ctx)) {
+      const result = reflex.run(ctx);
+      if (result && result.then) await result;
+    }
+  }
+  assert.ok(attacks >= 4, `3 秒内至少应攻击 4 次，实际 ${attacks}`);
+});
+
+test('hurt 反射在够不着时会追过去而不是原地不动', async () => {
+  const { createHurtReflex } = require('../src/body/interrupts');
+  const goalsSet = [];
+  const zombie = { id: 2, name: 'zombie', position: vec3(8, 64, 0), health: 20 };
+  const bot = {
+    entity: { position: vec3(0, 64, 0) },
+    entities: { 2: zombie },
+    heldItem: { name: 'iron_sword' },
+    inventory: {
+      items: () => [{ name: 'iron_sword', type: 1, count: 1, slot: 36 }],
+      slots: Array(46).fill(null),
+    },
+    pathfinder: { setGoal: (goal) => goalsSet.push(goal) },
+    attack: () => {},
+    lookAt: async () => {},
+    equip: async () => {},
+    registry: {},
+  };
+  const reflex = createHurtReflex({ counterMinHp: 12, counterRadius: 4, chaseRadius: 16 });
+  const perception = { self: { hp: 20 }, threats: [{ id: 2, type: 'zombie', dist: 8 }] };
+  const ctx = { now: 100000, bot, perception, lastHurtAt: 100000, shadow: false, record: () => {} };
+
+  const result = reflex.run(ctx);
+  if (result && result.then) await result;
+  assert.equal(goalsSet.length, 1, '应该设置寻路目标追过去');
+});
+
+test('打断日志不会每 tick 重复记录', () => {
+  const { createBrain } = require('../src/body/brain');
+  const { loadConfig } = require('../src/config');
+  const events = [];
+  const bot = {
+    entity: { position: vec3(0, 64, 0) },
+    health: 20,
+    food: 20,
+    isSleeping: false,
+    time: { timeOfDay: 6000 },
+    game: { dimension: 'overworld' },
+    players: {},
+    entities: { 1: { id: 1, name: 'zombie', position: vec3(2, 64, 0) } },
+    inventory: { items: () => [], slots: Array(46).fill(null), emptySlotCount: () => 36 },
+    registry: { itemsByName: {}, foodsByName: {} },
+    pathfinder: { setGoal() {}, isMoving: () => false },
+    blockAt: () => ({ name: 'grass_block', boundingBox: 'block', light: 15 }),
+    on() {},
+    attack() {},
+    lookAt: async () => {},
+    setControlState() {},
+    clearControlStates() {},
+  };
+  let t = 100000;
+  const brain = createBrain({
+    config: loadConfig(),
+    connection: { getBot: () => bot, isReady: () => true },
+    log: { log() {}, warn() {} },
+    record: (event) => events.push(event),
+    now: () => t,
+    brainConfig: { ...loadConfig().brain, shadowMode: false },
+  });
+  brain.running = true;
+  brain._lastHurtAt = 100000;
+  for (let i = 0; i < 20; i += 1) {
+    t += 100;
+    brain._lastHurtAt = t;
+    brain.tick();
+  }
+  const active = events.filter((e) => e.event === 'interrupt_active');
+  assert.ok(active.length <= 2, `20 个 tick 内 interrupt_active 不应重复刷屏，实际 ${active.length}`);
+});

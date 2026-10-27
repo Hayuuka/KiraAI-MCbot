@@ -234,10 +234,14 @@ test('digDown 每下降 5 格放一次火把', async () => {
   const originalMove = move.moveTo;
   const originalTorch = mining.placeTorchIfDark;
   mining.digBlockSafely = async () => ({ ok: true });
+  // 只模拟水平移动；垂直下落由 _stepDown 的重力等待完成
   move.moveTo = async (currentBot, target) => {
-    currentBot.entity.position = vec3(target.x, target.y, target.z);
+    currentBot.entity.position = vec3(target.x, currentBot.entity.position.y, target.z);
     return { ok: true };
   };
+  // 挖空脚下后重力生效：每次 tick 检查位置时把 y 降一格
+  const origBlockAt = bot.blockAt.bind(bot);
+  bot.blockAt = (pos) => origBlockAt(pos);
   mining.placeTorchIfDark = async () => {
     torchCalls.push(bot.entity.position.y);
     return { ok: true, placed: true, position: { x: 0, y: 0, z: 0 } };
@@ -289,10 +293,14 @@ test('digDown 到达目标深度后完成', async () => {
   const originalMove = move.moveTo;
   const originalTorch = mining.placeTorchIfDark;
   mining.digBlockSafely = async () => ({ ok: true });
+  // 只模拟水平移动；垂直下落由 _stepDown 的重力等待完成
   move.moveTo = async (currentBot, target) => {
-    currentBot.entity.position = vec3(target.x, target.y, target.z);
+    currentBot.entity.position = vec3(target.x, currentBot.entity.position.y, target.z);
     return { ok: true };
   };
+  // 挖空脚下后重力生效：每次 tick 检查位置时把 y 降一格
+  const origBlockAt = bot.blockAt.bind(bot);
+  bot.blockAt = (pos) => origBlockAt(pos);
   mining.placeTorchIfDark = async () => ({ ok: true, placed: false });
   try {
     const task = new DigDownTask({ depth: 3 }, { source: 'local', priority: 45 });

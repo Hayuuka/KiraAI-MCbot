@@ -125,10 +125,14 @@ const DEFAULTS = {
         activeMs: 2000,
         counterMinHp: 12,
         counterRadius: 4,
+        chaseRadius: 16,
+        swingCooldownMs: 650,
         fleeDistance: 12,
         searchRadius: 12,
         moveTimeoutMs: 6000,
-        cooldownMs: 1500,
+        // 原来 1500ms 太长：被围时每次触发都被冷却挡住，
+        // 表现就是"站着挨打不还手"。真正限制挥拳频率的是 swingCooldownMs。
+        cooldownMs: 250,
       },
       water: {
         searchRadius: 12,

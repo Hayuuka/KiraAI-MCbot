@@ -271,29 +271,69 @@ function createHurtReflex(config = {}) {
         : null;
       const hp = Number(ctx.perception.self.hp);
 
-      if (entity && Number.isFinite(hp) && hp >= cfg.counterMinHp && threat.dist <= cfg.counterRadius) {
-        return Promise.resolve(skills.inventory.equipBestWeapon(bot)).then(() => {
+      // 能打就打：冷却只限制"再次挥拳"，不限制"靠近目标"。
+      // 原来冷却期内直接 return null，她会在原地站着挨打
+      // （实测一次被围时 668 条 interrupt_active、只有 24 次真反击）。
+      if (entity && Number.isFinite(hp) && hp >= cfg.counterMinHp) {
+        const dist = skills.move.positionDistance(bot.entity.position, entity.position);
+        if (dist <= cfg.counterRadius) {
+          // 够得着：按武器冷却挥拳
+          if (ctx.now - (this._lastSwingAt || 0) < (cfg.swingCooldownMs || 650)) {
+            return { ok: true, action: 'waiting_swing' };
+          }
+          this._lastSwingAt = ctx.now;
+          return Promise.resolve(skills.inventory.equipBestWeapon(bot)).then(() => {
+            try {
+              if (typeof bot.lookAt === 'function') bot.lookAt(entity.position);
+              bot.attack(entity);
+              record(ctx, 'reflex_action', {
+                kind: 'hurt',
+                ok: true,
+                action: 'counter',
+                target: threat.type,
+                dist: Math.round(dist * 10) / 10,
+              });
+            } catch (error) {
+              record(ctx, 'reflex_action', {
+                kind: 'hurt',
+                ok: false,
+                action: 'counter',
+                reason: 'attack_failed',
+                message: error && error.message ? error.message : String(error),
+              });
+            }
+            return { ok: true };
+          });
+        }
+        // 够不着但在追：走过去，不要原地不动
+        if (dist <= (cfg.chaseRadius || 16)) {
           try {
-            if (typeof bot.lookAt === 'function') bot.lookAt(entity.position);
-            bot.attack(entity);
+            const goal = new (require('mineflayer-pathfinder').goals.GoalNear)(
+              entity.position.x, entity.position.y, entity.position.z, 2
+            );
+            if (bot.pathfinder && typeof bot.pathfinder.setGoal === 'function') {
+              bot.pathfinder.setGoal(goal);
+            }
             record(ctx, 'reflex_action', {
               kind: 'hurt',
               ok: true,
-              action: 'counter',
+              action: 'chase',
               target: threat.type,
+              dist: Math.round(dist * 10) / 10,
             });
+            return { ok: true };
           } catch (error) {
             record(ctx, 'reflex_action', {
               kind: 'hurt',
               ok: false,
-              action: 'counter',
-              reason: 'attack_failed',
+              action: 'chase',
+              reason: 'path_failed',
               message: error && error.message ? error.message : String(error),
             });
           }
-          return { ok: true };
-        });
+        }
       }
+      // 打不了（血少/没有目标/太远）：撤离
       return moveToSafeSpot(ctx, cfg, ctx.perception.threats, 'hurt');
     },
   };

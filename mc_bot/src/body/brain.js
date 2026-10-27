@@ -11,6 +11,7 @@ const { createDrives } = require('./drives');
 const { createArbiter } = require('./arbiter');
 const { createWatchdog } = require('./watchdog');
 const taskRegistry = require('../tasks');
+const skills = require('../skills');
 const { FAILURE_REASONS } = require('../tasks/base');
 
 const STAGE1_EQUIVALENTS = Object.freeze({
@@ -113,6 +114,7 @@ class Brain {
     this._offlineLogged = false;
     this._lastUnavailableLogAt = 0;
     this._wasInterrupted = false;
+    this._lastInterruptKind = null;
     this._boundBot = null;
     this._lastHurtAt = 0;
     this._hurtSourceId = null;
@@ -199,6 +201,26 @@ class Brain {
     return true;
   }
 
+  /**
+   * 定期检查护甲。equipBestArmor 之前从来没被任何地方调用，
+   * 所以她背包里有甲也一直裸着。这里每 30 秒补一次，
+   * 只在"背包里有更好的甲"时才真的动手。
+   */
+  _autoArmor(ctx) {
+    if (!ctx || ctx.shadow || !ctx.bot) return;
+    const now = ctx.now;
+    if (this._lastArmorCheckAt && now - this._lastArmorCheckAt < 30000) return;
+    this._lastArmorCheckAt = now;
+
+    const armor = skills.inventory;
+    if (!armor || typeof armor.equipBestArmor !== 'function') return;
+    Promise.resolve(armor.equipBestArmor(ctx.bot))
+      .then((ok) => {
+        if (ok) this._record('armor_equipped', {});
+      })
+      .catch(() => {});
+  }
+
   tick() {
     if (!this.running) return null;
     const now = this.now();
@@ -238,10 +260,15 @@ class Brain {
       this.interrupts.run(active, ctx);
       this.stats.interruptedTicks += 1;
       this._wasInterrupted = true;
-      this._record('interrupt_active', {
-        kind: active.kind,
-        top: before ? { id: before.id, kind: before.kind } : null,
-      });
+      // 同一次威胁只记一条，否则每 tick 一条会把日志刷爆
+      // （实测每小时 668 条，真正有用的记录全被淹没）。
+      if (this._lastInterruptKind !== active.kind) {
+        this._lastInterruptKind = active.kind;
+        this._record('interrupt_active', {
+          kind: active.kind,
+          top: before ? { id: before.id, kind: before.kind } : null,
+        });
+      }
       return this.snapshot();
     }
 
@@ -250,6 +277,7 @@ class Brain {
       const top = this.agenda.top();
       if (top && typeof top.onResume === 'function') top.onResume(ctx);
       this._wasInterrupted = false;
+      this._lastInterruptKind = null;
       this._record('interrupt_clear', {
         top: top ? { id: top.id, kind: top.kind } : null,
       });
@@ -307,6 +335,8 @@ class Brain {
         });
       }
     }
+
+    this._autoArmor(ctx);
     if (this.voice && typeof this.voice.tick === 'function') {
       try {
         this.voice.tick(ctx);

@@ -65,13 +65,19 @@ class FightTask extends Task {
       return false;
     }
     if (ctx.shadow) return true;
-    return Promise.resolve(skills.inventory.equipBestWeapon(ctx.bot)).then((ok) => {
-      if (ok === false) {
-        this.fail(FAILURE_REASONS.TOOL_UNAVAILABLE);
-        return false;
-      }
-      return true;
-    });
+    // 打架前先把甲穿上：equipBestArmor 之前从来没人调用，
+    // 所以她背包里有铁甲也一直裸奔，白白挨打。
+    return Promise.resolve()
+      .then(() => skills.inventory.equipBestArmor(ctx.bot))
+      .catch(() => false)
+      .then(() => skills.inventory.equipBestWeapon(ctx.bot))
+      .then((ok) => {
+        if (ok === false) {
+          this.fail(FAILURE_REASONS.TOOL_UNAVAILABLE);
+          return false;
+        }
+        return true;
+      });
   }
 
   progressMetric(ctx) {

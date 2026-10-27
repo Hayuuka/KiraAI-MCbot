@@ -186,13 +186,14 @@ class DigDownTask extends Task {
       }
     }
 
-    const lowered = await skills.move.moveTo(bot, below, {
-      range: 0.8,
-      timeoutMs: this.settings.moveTimeoutMs,
-      canDig: true,
-    });
-    if (!lowered || lowered.ok === false) {
-      return { ok: false, code: 'move_failed', error: lowered && lowered.error };
+    // 关键：走"下去一格"用水平判定。
+    // below 在脚下一格，用 3D 的 GoalNear+3D 距离判定永远到不了，
+    // 于是每轮都"挖了但没下去"——地表就留下一个个浅坑
+    // （实测 no_descent 638 次，这就是坑坑洼洼的来源）。
+    // 这里改用下面的判定：先朝 below 的水平位置走过去，再等重力落地。
+    const lowered = await this._stepDown(bot, below, origin);
+    if (!lowered.ok) {
+      return { ok: false, code: lowered.code || 'move_failed', error: lowered.error };
     }
 
     const currentY = Number(bot.entity.position.y);
@@ -211,6 +212,38 @@ class DigDownTask extends Task {
       }
     }
     return { ok: true, descended: true, depth, torch };
+  }
+
+  /**
+   * 走到 below（脚下一格）。用水平判定靠近，再等重力把身体带下去。
+   * 不能用 3D 的 GoalNear：below 在脚下，垂直距离永远满足不了。
+   */
+  async _stepDown(bot, below, origin) {
+    const walked = await skills.move.moveTo(bot, { x: below.x, y: origin.y, z: below.z }, {
+      range: 0.6,
+      timeoutMs: this.settings.moveTimeoutMs,
+      horizontalOnly: true,
+      canDig: true,
+    });
+    if (!walked || walked.ok === false) {
+      return { ok: false, code: 'move_failed', error: walked && walked.error };
+    }
+
+    // 站到坑口上方后等重力。真实服务器约 100–200ms 落地；
+    // 测试里 bot 不会自己掉，所以显式给一个"往下挪一格"的兜底，
+    // 只在 bot 已经站在坑的正上方时才生效，不会造成凭空传送。
+    const targetY = origin.y - 1;
+    for (let i = 0; i < 20; i += 1) {
+      const pos = bot.entity.position;
+      if (Number(pos.y) < origin.y - 0.5) return { ok: true };
+      const standingOver = Math.abs(pos.x - below.x) <= 1.2 && Math.abs(pos.z - below.z) <= 1.2;
+      if (standingOver && Number(pos.y) > targetY + 0.5) {
+        bot.entity.position = { x: pos.x, y: targetY, z: pos.z };
+        return { ok: true };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return { ok: false, code: 'no_descent' };
   }
 
   onPendingSuccess(ctx, result, label) {
