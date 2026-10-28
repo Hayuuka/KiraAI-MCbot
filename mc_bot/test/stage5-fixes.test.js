@@ -8,8 +8,7 @@ const minecraftData = require('minecraft-data')('1.21.1');
 const { createBrain } = require('../src/body/brain');
 const { perceive } = require('../src/body/perception');
 const { GotoTask } = require('../src/tasks/goto');
-const { DigInTask } = require('../src/tasks/digIn');
-const mineSkill = require('../src/skills/mine');
+const { DRIVE_TASKS } = require('../src/body/arbiter');
 
 function makeBot(options = {}) {
   const state = {
@@ -334,54 +333,27 @@ test('手持面包但背包里有铁剑时，单只僵尸仍判为可打', () =>
   assert.ok(snapshot.myPower > 6.8);
 });
 
-test('夜间无床、背包无方块、无山壁时，产出非 idle 的兜底任务', () => {
+test('夜间无床时只退回 idle，不再挖洞自保', () => {
   const { brain, ctx } = setupNightFallback();
   const choice = brain.arbiter.step(ctx);
-  assert.equal(choice.kind, 'digIn');
-  assert.notEqual(choice.kind, 'idle');
+  assert.equal(choice.kind, 'idle');
+  assert.match(choice.reason, /^night_no_option/);
 });
 
-test('digIn 在天亮后完成', () => {
-  const { bot, brain, ctx } = setupNightFallback();
-  const task = new DigInTask({}, { source: 'local', priority: 58 });
-  task.tick(ctx);
-  assert.equal(task.state, 'running');
-  task.tick({
-    ...ctx,
-    now: 2000,
-    perception: { ...ctx.perception, world: { ...ctx.perception.world, isDay: true } },
-  });
-  assert.equal(task.isDone({
-    ...ctx,
-    perception: { ...ctx.perception, world: { ...ctx.perception.world, isDay: true } },
-  }), true);
-  assert.equal(task.state, 'done');
-  assert.ok(brain);
-  assert.ok(bot);
+test('digIn 与 shelter 已从任务注册表移除', () => {
+  const { brain } = setupNightFallback();
+  const kinds = brain.tasks.kinds();
+  assert.equal(brain.tasks.get('digIn'), null);
+  assert.equal(brain.tasks.get('shelter'), null);
+  assert.equal(kinds.includes('digIn'), false);
+  assert.equal(kinds.includes('shelter'), false);
+  assert.ok(brain.tasks.get('digDown'));
 });
 
-test('digIn 挖成功后不再重复挖', async () => {
-  const { bot, ctx } = setupNightFallback();
-  const originalMine = mineSkill.mineBlock;
-  let mineCalls = 0;
-  mineSkill.mineBlock = async () => {
-    mineCalls += 1;
-    bot.entity.position = vec3(0, 63, 0);
-    return { ok: true };
-  };
-  const task = new DigInTask({}, { source: 'local', priority: 58 });
-  const liveCtx = { ...ctx, shadow: false };
-  try {
-    task.tick(liveCtx);
-    await new Promise((resolve) => setImmediate(resolve));
-    task.tick({ ...liveCtx, now: 1100 });
-    for (let index = 0; index < 5; index += 1) {
-      task.tick({ ...liveCtx, now: 1200 + index * 100 });
-    }
-  } finally {
-    mineSkill.mineBlock = originalMine;
-  }
-  assert.equal(mineCalls, 1);
+test('夜晚驱动与仲裁只保留 sleep', () => {
+  assert.deepEqual(DRIVE_TASKS.night, [{ kind: 'sleep', priority: 60 }]);
+  const { brain, ctx } = setupNightFallback();
+  assert.equal(brain.arbiter._chooseNight(ctx), null);
 });
 
 test('反射打断 30 秒后，任务 elapsedSec 是否跳过了这 30 秒', () => {
@@ -398,50 +370,17 @@ test('反射打断 30 秒后，任务 elapsedSec 是否跳过了这 30 秒', () 
   assert.ok(brain);
 });
 
-test('digIn 躲好后不会被看门狗回收', () => {
+test('夜间无床的 idle 仍使用正常仲裁优先级', () => {
   const { brain, ctx } = setupNightFallback();
-  const records = [];
-  const liveCtx = {
-    ...ctx,
-    record: (event, payload) => records.push({ event, ...payload }),
-  };
-  const task = new DigInTask({}, { source: 'local', priority: 58 });
-  task.tick(liveCtx);
-  task.dugOnce = true;
-  brain.agenda.push(task, { now: liveCtx.now, leaseMs: null });
-
-  for (let elapsed = 100; elapsed <= 60000; elapsed += 100) {
-    const next = { ...liveCtx, now: 1000 + elapsed };
-    brain.agenda.tick(next);
-    brain.watchdog.check(next);
-  }
-
-  assert.equal(brain.agenda.size, 1);
-  assert.equal(brain.agenda.top(), task);
-  assert.equal(records.some((entry) => entry.event === 'stuck_recovery'), false);
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'idle');
+  assert.equal(choice.priority, brain.config.local.idlePriority);
 });
 
-test('digIn 挖之前仍然会被看门狗管', () => {
+test('夜间回退文案不再提 shelter 或 digIn', () => {
   const { brain, ctx } = setupNightFallback();
-  const records = [];
-  const liveCtx = {
-    ...ctx,
-    record: (event, payload) => records.push({ event, ...payload }),
-  };
-  const task = new DigInTask({}, { source: 'local', priority: 58 });
-  task.tick(liveCtx);
-  brain.agenda.push(task, { now: liveCtx.now, leaseMs: null });
-
-  for (let elapsed = 100; elapsed <= 45000; elapsed += 100) {
-    const next = { ...liveCtx, now: 1000 + elapsed };
-    brain.agenda.tick(next);
-    brain.watchdog.check(next);
-    if (brain.agenda.size === 0) break;
-  }
-
-  assert.equal(brain.agenda.size, 0);
-  assert.equal(task.failure && task.failure.reason, 'no_progress');
-  assert.equal(records.some((entry) => entry.event === 'stuck_recovery'), true);
+  const choice = brain.arbiter.step(ctx);
+  assert.doesNotMatch(choice.reason, /shelter|digIn/);
 });
 
 test('重复的同类仲裁不会刷日志', () => {

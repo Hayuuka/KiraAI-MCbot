@@ -7,12 +7,10 @@ const { EatTask } = require('./eat');
 const { HealTask } = require('./heal');
 const { FleeTask } = require('./flee');
 const { SleepTask } = require('./sleep');
-const { ShelterTask } = require('./shelter');
 const { FightTask } = require('./fight');
 const { GuardTask } = require('./guard');
 const { AssistTask } = require('./assist');
 const { FollowTask } = require('./follow');
-const { DigInTask } = require('./digIn');
 const { DigDownTask } = require('./digDown');
 const { MineOreTask } = require('./mineOre');
 const { CraftTask } = require('./craft');
@@ -75,12 +73,10 @@ register(EatTask);
 register(HealTask);
 register(FleeTask);
 register(SleepTask);
-register(ShelterTask);
 register(FightTask);
 register(GuardTask);
 register(AssistTask);
 register(FollowTask);
-register(DigInTask);
 register(DigDownTask);
 register(MineOreTask);
 register(CraftTask);
@@ -100,12 +96,10 @@ module.exports = {
   HealTask,
   FleeTask,
   SleepTask,
-  ShelterTask,
   FightTask,
   GuardTask,
   AssistTask,
   FollowTask,
-  DigInTask,
   DigDownTask,
   MineOreTask,
   CraftTask,

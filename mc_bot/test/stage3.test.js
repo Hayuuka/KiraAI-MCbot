@@ -10,7 +10,6 @@ const { EatTask } = require('../src/tasks/eat');
 const { HealTask } = require('../src/tasks/heal');
 const { FleeTask } = require('../src/tasks/flee');
 const { SleepTask } = require('../src/tasks/sleep');
-const { ShelterTask } = require('../src/tasks/shelter');
 const tasks = require('../src/tasks');
 const skills = require('../src/skills');
 
@@ -130,14 +129,6 @@ function makeConfig() {
         maxMinutes: 10,
         maxAttempts: 4,
         monsterRadius: 8,
-      },
-      shelter: {
-        searchRadius: 8,
-        moveTimeoutMs: 1000,
-        maxMinutes: 10,
-        maxAttempts: 4,
-        blocksRequired: 2,
-        reach: 2,
       },
     },
     local: {
@@ -261,33 +252,11 @@ test('placeBedAt 只有在目标方块真的变成床后才成功', async () => 
   assert.equal(bot.blocks.get(0, 64, 0).name, 'red_bed');
 });
 
-test('shelter 找到山壁并只在 shadow 记录，天亮后完成', () => {
-  const bot = makeBot({ items: [{ name: 'dirt', count: 3 }] });
-  bot.blocks.set(0, 63, 0, 'stone');
-  bot.blocks.set(1, 63, 0, 'stone');
-  bot.blocks.set(2, 63, 0, 'stone');
-  bot.blocks.set(2, 64, 0, 'stone');
-  bot.blocks.set(2, 65, 0, 'stone');
-  const perception = makePerception({ world: { isDay: false, ticksToDusk: 0, underground: false } });
-  const ctx = makeContext(bot, { perception });
-
-  const feasible = ShelterTask.feasible({ bot, perception, config: makeConfig() });
-  assert.ok(feasible);
-  const task = new ShelterTask({}, { source: 'test' });
-  task.tick(ctx);
-  assert.equal(task.phase, 'goto_outside');
-  assert.equal(bot.calls.dig, 0);
-  assert.equal(bot.calls.place, 0);
-
-  task.tick({
-    ...ctx,
-    now: 1100,
-    perception: makePerception({ world: { isDay: true, ticksToDusk: 6000, underground: false } }),
-  });
-  assert.equal(task.state, 'done');
+test('shelter 任务已不再注册', () => {
+  assert.equal(tasks.get('shelter'), null);
 });
 
-test('夜间仲裁无床时回退到 shelter', () => {
+test('夜间仲裁无床时回退到 idle', () => {
   const bot = makeBot({ items: [{ name: 'dirt', count: 3 }] });
   bot.blocks.set(0, 63, 0, 'stone');
   bot.blocks.set(1, 63, 0, 'stone');
@@ -310,5 +279,6 @@ test('夜间仲裁无床时回退到 shelter', () => {
     record() {},
   });
 
-  assert.equal(choice.kind, 'shelter');
+  assert.equal(choice.kind, 'idle');
+  assert.match(choice.reason, /^night_no_option/);
 });

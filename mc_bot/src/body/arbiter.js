@@ -8,10 +8,7 @@ const PICKAXES = Object.freeze([
 ]);
 
 const DRIVE_TASKS = Object.freeze({
-  night: [
-    { kind: 'sleep', priority: 60 },
-    { kind: 'shelter', priority: 59 },
-  ],
+  night: [{ kind: 'sleep', priority: 60 }],
   health: [{ kind: 'heal', priority: 58 }],
   hunger: [{ kind: 'eat', priority: 55 }],
 });
@@ -106,7 +103,7 @@ class Arbiter {
     if (perception.world.isDay === false && !perception.world.underground && !local.workAtNight) {
       const night = this._chooseNight(ctx);
       if (night) return night;
-      return idle('night_no_option:sleep=no_bed,shelter=no_material_or_wall,digIn=no_solid_ground');
+      return idle('night_no_option:sleep=no_bed');
     }
 
     const canWork = perception.world.isDay !== false ||
@@ -209,11 +206,7 @@ class Arbiter {
   }
 
   _chooseNight(ctx) {
-    const options = [
-      { kind: 'sleep', priority: 60 },
-      { kind: 'shelter', priority: 59 },
-      { kind: 'digIn', priority: 58 },
-    ];
+    const options = [{ kind: 'sleep', priority: 60 }];
     for (const option of options) {
       const TaskClass = this.tasks && this.tasks.get ? this.tasks.get(option.kind) : null;
       if (!TaskClass) continue;
