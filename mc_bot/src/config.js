@@ -176,7 +176,7 @@ const DEFAULTS = {
     },
     tasks: {
       idle: {
-        durationMs: 5000,
+        durationMs: 3000,
       },
       goto: {
         tolerance: 2,

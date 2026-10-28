@@ -230,10 +230,14 @@ test('digDown 每下降 5 格放一次火把', async () => {
   fillStoneFloor(bot, -1, 12, 48, 63);
   const { ctx } = makeBrain(bot);
   const torchCalls = [];
+  const digOptions = [];
   const originalDig = mining.digBlockSafely;
   const originalMove = move.moveTo;
   const originalTorch = mining.placeTorchIfDark;
-  mining.digBlockSafely = async () => ({ ok: true });
+  mining.digBlockSafely = async (_bot, _block, options) => {
+    digOptions.push(options);
+    return { ok: true };
+  };
   // 只模拟水平移动；垂直下落由 _stepDown 的重力等待完成
   move.moveTo = async (currentBot, target) => {
     currentBot.entity.position = vec3(target.x, currentBot.entity.position.y, target.z);
@@ -251,6 +255,8 @@ test('digDown 每下降 5 格放一次火把', async () => {
     await drainTask(task, ctx);
     assert.equal(task.state, 'done');
     assert.equal(torchCalls.length, 2);
+    assert.ok(digOptions.length > 0);
+    assert.ok(digOptions.every((options) => options.allowFall === true));
   } finally {
     mining.digBlockSafely = originalDig;
     move.moveTo = originalMove;

@@ -140,7 +140,7 @@ class DigDownTask extends Task {
     if (headBlock && !skills.mining.isAir(headBlock) && skills.mining.isSolid(headBlock)) {
       const clearedHead = await skills.mining.digBlockSafely(bot, headBlock, {
         probeDepth: this.settings.probeDepth,
-        allowFall: false,
+        allowFall: true,
       });
       if (!clearedHead.ok) {
         return { ok: false, code: clearedHead.code || 'head_dig_failed', hazard: clearedHead.hazard };
@@ -154,7 +154,7 @@ class DigDownTask extends Task {
     if (frontBlock && !skills.mining.isAir(frontBlock) && skills.mining.isSolid(frontBlock)) {
       const clearedFront = await skills.mining.digBlockSafely(bot, frontBlock, {
         probeDepth: this.settings.probeDepth,
-        allowFall: false,
+        allowFall: true,
       });
       if (!clearedFront.ok) {
         return { ok: false, code: clearedFront.code || 'front_dig_failed', hazard: clearedFront.hazard };
@@ -179,7 +179,7 @@ class DigDownTask extends Task {
     if (!skills.mining.isAir(belowBlock)) {
       const loweredBlock = await skills.mining.digBlockSafely(bot, belowBlock, {
         probeDepth: this.settings.probeDepth,
-        allowFall: false,
+        allowFall: true,
       });
       if (!loweredBlock.ok) {
         return { ok: false, code: loweredBlock.code || 'down_dig_failed', hazard: loweredBlock.hazard };

@@ -185,6 +185,18 @@ class Arbiter {
       }
     }
 
+    const candidates = this.tasks.available(ctx, this._taskDefaults());
+    const collect = candidates.find((candidate) => candidate.kind === 'collectBlock');
+    if (collect) {
+      return {
+        kind: collect.kind,
+        args: collect.args,
+        priority: local.collectPriority,
+        reason: 'nearby_resource',
+        note: collect.note,
+      };
+    }
+
     const freeSlots = Number(perception.inventory && perception.inventory.freeSlots);
     if (
       canWork &&
@@ -206,18 +218,6 @@ class Arbiter {
           note: spec.note || '阶梯式向下探索',
         };
       }
-    }
-
-    const candidates = this.tasks.available(ctx, this._taskDefaults());
-    const collect = candidates.find((candidate) => candidate.kind === 'collectBlock');
-    if (collect) {
-      return {
-        kind: collect.kind,
-        args: collect.args,
-        priority: local.collectPriority,
-        reason: 'nearby_resource',
-        note: collect.note,
-      };
     }
 
     const stroll = this._strollTarget(perception);
