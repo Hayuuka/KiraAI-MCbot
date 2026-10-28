@@ -76,7 +76,37 @@ class Arbiter {
 
     const hp = perception.self.hp;
     if (hp != null && hp < local.minHpToWork) {
-      return idle('low_hp_waiting_regen', `等待回血（food=${perception.self.food}）`);
+      const HealTask = this.tasks && this.tasks.get ? this.tasks.get('heal') : null;
+      const heal = HealTask ? HealTask.feasible({ ...ctx, args: {} }) : null;
+      if (heal) {
+        return {
+          kind: 'heal',
+          args: heal.args || {},
+          priority: DRIVE_TASKS.health[0].priority,
+          reason: 'low_hp_recover',
+          note: heal.note || '',
+        };
+      }
+
+      const FleeTask = this.tasks && this.tasks.get ? this.tasks.get('flee') : null;
+      const flee = FleeTask ? FleeTask.feasible({ ...ctx, args: {} }) : null;
+      if (flee) {
+        return {
+          kind: 'flee',
+          args: flee.args || {},
+          priority: 56,
+          reason: 'low_hp_flee',
+          note: flee.note || '',
+        };
+      }
+
+      return {
+        kind: 'idle',
+        args: { durationMs: 1500 },
+        priority: local.idlePriority,
+        reason: 'low_hp_no_recovery',
+        note: `无法治疗且附近无安全撤离点（food=${perception.self.food}）`,
+      };
     }
     const threat = perception.threats.find((entry) => entry.dist <= local.dangerRadius);
     if (threat) {

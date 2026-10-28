@@ -165,9 +165,14 @@ function setupCollectLease() {
   return { brain, ctx, records };
 }
 
-function setupArbiterThreat(threat) {
+function setupArbiterThreat(threat, options = {}) {
   const zombie = { id: 2, name: 'zombie', position: vec3(5, 64, 0), health: 20 };
-  const bot = makeBot({ items: [{ name: 'iron_sword', count: 1 }], entities: { 2: zombie } });
+  const bot = makeBot({
+    items: options.items || [{ name: 'iron_sword', count: 1 }],
+    entities: options.entities || { 2: zombie },
+    health: options.health,
+    food: options.food,
+  });
   const brain = createBrain({
     config: { brain: { shadowMode: true, tickMs: 100, arbiterMs: 500 } },
     connection: { getBot: () => bot, isReady: () => true },
@@ -176,7 +181,7 @@ function setupArbiterThreat(threat) {
     record() {},
   });
   const perception = makePerception(bot);
-  perception.threats = [threat];
+  perception.threats = threat ? [threat] : [];
   brain.perception = perception;
   return {
     bot,
@@ -392,13 +397,49 @@ test('重复的同类仲裁不会刷日志', () => {
   assert.ok(rejected.length <= 1);
 });
 
-test('低血等待回血使用明确原因并带食物信息', () => {
-  const { brain, ctx } = setupCollectLease();
-  ctx.perception.self.hp = 5;
-  ctx.perception.self.food = 4;
+test('低血且无威胁但有食物时派发 heal', () => {
+  const { brain, ctx } = setupArbiterThreat(null, {
+    health: 5,
+    food: 4,
+    items: [{ name: 'bread', count: 1 }],
+    entities: {},
+  });
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'heal');
+  assert.equal(choice.reason, 'low_hp_recover');
+  assert.equal(choice.priority, 58);
+});
+
+test('低血且附近有僵尸但无食物时派发 flee', () => {
+  const { brain, ctx } = setupArbiterThreat({
+    id: 2,
+    type: 'zombie',
+    dist: 5,
+    threat: 2,
+    canWin: false,
+  }, {
+    health: 5,
+    food: 4,
+    items: [],
+    entities: { 2: { id: 2, name: 'zombie', position: vec3(5, 64, 0), health: 20 } },
+  });
+  const choice = brain.arbiter.step(ctx);
+  assert.equal(choice.kind, 'flee');
+  assert.equal(choice.reason, 'low_hp_flee');
+  assert.equal(choice.priority, 56);
+});
+
+test('低血且无怪无食时只短暂 idle 并快速重评估', () => {
+  const { brain, ctx } = setupArbiterThreat(null, {
+    health: 5,
+    food: 4,
+    items: [],
+    entities: {},
+  });
   const choice = brain.arbiter.step(ctx);
   assert.equal(choice.kind, 'idle');
-  assert.equal(choice.reason, 'low_hp_waiting_regen');
+  assert.equal(choice.reason, 'low_hp_no_recovery');
+  assert.ok(choice.args.durationMs <= 3000);
   assert.match(choice.note, /food=4/);
 });
 
