@@ -619,8 +619,16 @@ class McBridgePlugin(BasePlugin):
         hp = data.get("hp")
         food = data.get("food")
         pos = data.get("pos")
+        # 本地新行为层发的是 time/ticksToDawn，旧层发的是 timeOfDay/dayProgress
         tod = data.get("timeOfDay")
+        if tod is None:
+            tod = 13000 if data.get("time") == "night" else 0
         day = data.get("dayProgress") or {}
+        if not day and data.get("ticksToDawn") is not None:
+            day = {
+                "phase": "night" if data.get("time") == "night" else "day",
+                "remainingSec": data["ticksToDawn"],
+            }
         underground = data.get("underground")
         last = str(data.get("lastResult") or "").strip()
 

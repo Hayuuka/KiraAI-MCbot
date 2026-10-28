@@ -8,6 +8,7 @@ const minecraftData = require('minecraft-data')('1.21.1');
 const { createBrain } = require('../src/body/brain');
 const { createMind, MIND_STATE } = require('../src/body/mind');
 const { createActions } = require('../src/actions');
+const { DEFAULTS } = require('../src/config');
 const skills = require('../src/skills');
 
 class FakeLink {
@@ -184,6 +185,37 @@ test('mind 在 12 次/小时后停止发问', () => {
   assert.equal(env.mind.state, MIND_STATE.IDLE);
   assert.equal(env.mind.request(ctx, 'rate-test'), false);
   assert.equal(env.mind.askTimes.length, 12);
+});
+
+test('mind 默认配额与超时已放宽', () => {
+  const mind = createMind({ now: () => 0 });
+  assert.equal(DEFAULTS.brain.mind.maxAsksPerHour, 40);
+  assert.equal(DEFAULTS.brain.mind.timeoutMs, 45000);
+  assert.equal(DEFAULTS.brain.mind.cooldownMs, 15000);
+  assert.equal(mind.config.maxAsksPerHour, 40);
+  assert.equal(mind.config.timeoutMs, 45000);
+  assert.equal(mind.config.cooldownMs, 15000);
+});
+
+test('mind_rate_limited 日志最多每 60 秒记录一次', () => {
+  const env = setup({ maxAsksPerHour: 1 });
+  assert.equal(env.mind.request(env.ctx, 'rate-test'), true);
+  let ctx = env.advance(20001);
+  env.mind.tick(ctx);
+  ctx = env.advance(30001);
+  env.mind.tick(ctx);
+  assert.equal(env.mind.state, MIND_STATE.IDLE);
+
+  assert.equal(env.mind.request(ctx, 'rate-test'), false);
+  assert.equal(env.mind.request(ctx, 'rate-test'), false);
+  const countRateLimitLogs = () => env.records
+    .filter((entry) => entry.event === 'mind_rate_limited').length;
+  assert.equal(countRateLimitLogs(), 1);
+
+  ctx = env.advance(60001);
+  env.mind.tick(ctx);
+  assert.equal(env.mind.request(ctx, 'rate-test'), false);
+  assert.equal(countRateLimitLogs(), 2);
 });
 
 test('validate 拒绝不存在的任务名并返回 alternatives', () => {

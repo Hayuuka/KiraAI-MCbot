@@ -12,9 +12,9 @@ const MIND_STATE = Object.freeze({
 
 const FALLBACK = Object.freeze({
   enabled: true,
-  timeoutMs: 20000,
-  cooldownMs: 30000,
-  maxAsksPerHour: 12,
+  timeoutMs: 45000,
+  cooldownMs: 15000,
+  maxAsksPerHour: 40,
   socialIntervalMs: 600000,
   taskFailureWakeMinMs: 60000,
   maxCan: 6,
@@ -57,6 +57,7 @@ class Mind {
     this._consecutiveFailures = 0;
     this._lastFailureWakeAt = -Infinity;
     this._lastInteractionAt = this.now();
+    this._lastRateLimitLogAt = -Infinity;
     this._lastSituation = null;
     this.lastQuestion = null;
     this.lastAnswer = null;
@@ -138,10 +139,13 @@ class Mind {
     const now = this._now(ctx);
     this._pruneAskTimes(now);
     if (this.askTimes.length >= Math.max(1, Math.trunc(this.config.maxAsksPerHour))) {
-      this._record('mind_rate_limited', {
-        asks: this.askTimes.length,
-        limit: this.config.maxAsksPerHour,
-      });
+      if (now - this._lastRateLimitLogAt >= 60000) {
+        this._lastRateLimitLogAt = now;
+        this._record('mind_rate_limited', {
+          asks: this.askTimes.length,
+          limit: this.config.maxAsksPerHour,
+        });
+      }
       return false;
     }
 

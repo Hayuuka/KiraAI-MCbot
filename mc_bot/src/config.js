@@ -42,9 +42,9 @@ const DEFAULTS = {
     logFile: 'brain-shadow.jsonl',
     mind: {
       enabled: true,
-      timeoutMs: 20000,
-      cooldownMs: 30000,
-      maxAsksPerHour: 12,
+      timeoutMs: 45000,
+      cooldownMs: 15000,
+      maxAsksPerHour: 40,
       socialIntervalMs: 600000,
       taskFailureWakeMinMs: 60000,
       maxCan: 6,
