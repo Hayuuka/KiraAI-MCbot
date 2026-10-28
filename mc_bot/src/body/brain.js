@@ -14,6 +14,8 @@ const taskRegistry = require('../tasks');
 const skills = require('../skills');
 const { FAILURE_REASONS } = require('../tasks/base');
 
+const GUARD_YIELD_TASKS = new Set(['collectBlock', 'digDown', 'mineOre', 'craft', 'build']);
+
 const STAGE1_EQUIVALENTS = Object.freeze({
   collectBlock: new Set(['mine']),
   idle: new Set(['idle']),
@@ -412,7 +414,19 @@ class Brain {
       this.mind.observeChoice(choice, ctx);
     }
 
-    if (top && choice.priority <= top.priority) {
+    const configuredGuardYieldMs = Number(this.config.local && this.config.local.guardYieldMs);
+    const guardYieldMs = Number.isFinite(configuredGuardYieldMs) ? configuredGuardYieldMs : 120000;
+    const guardElapsedMs = top && top.kind === 'guard' &&
+      typeof top.elapsedSec === 'function'
+      ? top.elapsedSec(ctx) * 1000
+      : 0;
+    const guardYielded = Boolean(
+      top &&
+      top.kind === 'guard' &&
+      guardElapsedMs >= guardYieldMs &&
+      GUARD_YIELD_TASKS.has(choice.kind)
+    );
+    if (top && choice.priority <= top.priority && !guardYielded) {
       // 同类同优先级的重复选择是正常的，不记日志。
       if (choice.kind === top.kind) return null;
 
@@ -439,6 +453,13 @@ class Brain {
     if (!task) {
       this._record('local_create_failed', { choice });
       return null;
+    }
+    if (guardYielded) {
+      this._record('guard_yielded', {
+        fromTop: 'guard',
+        to: choice.kind,
+        guardElapsedSec: Math.round(guardElapsedMs / 1000),
+      });
     }
 
     const TaskClass = this.tasks.get ? this.tasks.get(choice.kind) : null;

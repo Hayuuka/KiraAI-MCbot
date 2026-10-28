@@ -8,6 +8,8 @@ const { FightTask } = require('../src/tasks/fight');
 const { GuardTask } = require('../src/tasks/guard');
 const { AssistTask } = require('../src/tasks/assist');
 const combat = require('../src/skills/combat');
+const move = require('../src/skills/move');
+const world = require('../src/skills/world');
 
 function makeBot(options = {}) {
   const state = {
@@ -182,6 +184,71 @@ test('guard 在 shadow 下只记录，时间到由任务时钟完成', () => {
   assert.equal(bot.calls.equip, 0);
   task.tick({ ...ctx, now: 6000 });
   assert.equal(task.state, 'done');
+});
+
+test('guard 无敌人时会巡逻移动而不是原地静止', async () => {
+  const bot = makeBot({ items: [{ name: 'iron_sword', count: 1 }] });
+  const task = new GuardTask({ radius: 12, durationMs: 5000 }, { source: 'test' });
+  const ctx = makeContext(bot, { shadow: false, now: 1000 });
+  const originalFind = world.findSafeSpot;
+  const originalMove = move.moveTo;
+  const moveOptions = [];
+  let moveCalls = 0;
+  world.findSafeSpot = () => ({ x: 5, y: 64, z: 0 });
+  move.moveTo = async (_bot, _spot, options) => {
+    moveCalls += 1;
+    moveOptions.push(options);
+    return { ok: true };
+  };
+  try {
+    task.tick(ctx);
+    await new Promise((resolve) => setImmediate(resolve));
+    task.tick({ ...ctx, now: 1100 });
+    await new Promise((resolve) => setImmediate(resolve));
+    task.tick({ ...ctx, now: 1200 });
+  } finally {
+    world.findSafeSpot = originalFind;
+    move.moveTo = originalMove;
+  }
+  assert.equal(moveCalls, 1);
+  assert.deepEqual(moveOptions[0], { range: 1, timeoutMs: 5000 });
+});
+
+test('guard 巡逻期间发现敌人立即恢复战斗', async () => {
+  const bot = makeBot({ items: [{ name: 'iron_sword', count: 1 }] });
+  const task = new GuardTask({ radius: 12, durationMs: 5000 }, { source: 'test' });
+  const ctx = makeContext(bot, { shadow: false, now: 1000 });
+  const originalFind = world.findSafeSpot;
+  const originalMove = move.moveTo;
+  const originalCombatTick = combat.combatTick;
+  let moveCalls = 0;
+  let combatCalls = 0;
+  world.findSafeSpot = () => ({ x: 5, y: 64, z: 0 });
+  move.moveTo = async () => {
+    moveCalls += 1;
+    return { ok: true };
+  };
+  combat.combatTick = () => {
+    combatCalls += 1;
+    return { ok: true, action: 'attacked' };
+  };
+  try {
+    for (let now = 1000; now <= 1300 && moveCalls === 0; now += 100) {
+      task.tick({ ...ctx, now });
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(moveCalls, 1);
+    bot.entities[2] = { id: 2, name: 'zombie', position: vec3(2, 64, 0), health: 20 };
+    for (let now = 1400; now <= 1800 && combatCalls === 0; now += 100) {
+      await new Promise((resolve) => setImmediate(resolve));
+      task.tick({ ...ctx, now });
+    }
+  } finally {
+    world.findSafeSpot = originalFind;
+    move.moveTo = originalMove;
+    combat.combatTick = originalCombatTick;
+  }
+  assert.equal(combatCalls, 1);
 });
 
 test('assist 在玩家周围威胁消失并持续安全后完成', async () => {

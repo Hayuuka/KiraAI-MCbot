@@ -80,6 +80,7 @@ const DEFAULTS = {
       dangerRadius: 8,
       workAtNight: false,
       localLeaseMs: 120000,
+      guardYieldMs: 120000,
       collectPriority: 40,
       miningPriority: 45,
       miningSearchRadius: 32,

@@ -8,6 +8,7 @@ const minecraftData = require('minecraft-data')('1.21.1');
 const { createBrain } = require('../src/body/brain');
 const { perceive } = require('../src/body/perception');
 const { GotoTask } = require('../src/tasks/goto');
+const { GuardTask } = require('../src/tasks/guard');
 const { DRIVE_TASKS } = require('../src/body/arbiter');
 
 function makeBot(options = {}) {
@@ -291,6 +292,33 @@ test('本地 collectBlock 任务能否活过 localLeaseMs', () => {
   assert.equal(brain.agenda.top(), task);
   assert.notEqual(task.state, 'failed');
   assert.notEqual(task.failure && task.failure.reason, 'lease_expired');
+});
+
+test('guard 跑满 120 秒后允许 collectBlock 抢占并记录 guard_yielded', () => {
+  const { brain, ctx, records } = setupCollectLease();
+  const guard = new GuardTask({ durationMs: 600000 }, { source: 'mind', priority: 50 });
+  guard.startedAt = ctx.now - 120000;
+  brain.agenda.push(guard, { now: ctx.now - 120000, leaseMs: null });
+
+  const task = brain._arbitrate(ctx);
+  assert.equal(task.kind, 'collectBlock');
+  assert.equal(brain.agenda.top().kind, 'collectBlock');
+  const yielded = records.find((entry) => entry.event === 'guard_yielded');
+  assert.ok(yielded);
+  assert.equal(yielded.fromTop, 'guard');
+  assert.equal(yielded.to, 'collectBlock');
+  assert.equal(yielded.guardElapsedSec, 120);
+});
+
+test('guard 只跑 60 秒时 collectBlock 仍不能抢占', () => {
+  const { brain, ctx, records } = setupCollectLease();
+  const guard = new GuardTask({ durationMs: 600000 }, { source: 'mind', priority: 50 });
+  guard.startedAt = ctx.now - 60000;
+  brain.agenda.push(guard, { now: ctx.now - 60000, leaseMs: null });
+
+  assert.equal(brain._arbitrate(ctx), null);
+  assert.equal(brain.agenda.top(), guard);
+  assert.equal(records.some((entry) => entry.event === 'guard_yielded'), false);
 });
 
 test('8 格内有僵尸时，仲裁器产出 fight 而不是 idle', () => {

@@ -4,12 +4,14 @@ const skills = require('../skills');
 const { Task, finiteNumber, integerAtLeast } = require('./base');
 
 const FALLBACK = Object.freeze({ radius: 12, durationMs: 600000 });
+const PATROL_INTERVAL_MS = 4000;
 
 class GuardTask extends Task {
   constructor(args = {}, meta = {}) {
     super(args, meta);
     this.settings = { ...FALLBACK };
     this.combatState = {};
+    this._lastPatrolAt = -Infinity;
   }
 
   static normalizeArgs(args = {}) {
@@ -27,7 +29,7 @@ class GuardTask extends Task {
         durationMs: integerAtLeast(config && config.durationMs, FALLBACK.durationMs, 1000),
       },
       etaSec: Math.ceil(integerAtLeast(config && config.durationMs, FALLBACK.durationMs, 1000) / 1000),
-      note: '在附近巡逻并攻击敌对生物',
+      note: '在附近巡逻并攻击敌对生物（有敌人时战斗，没有时来回走动）',
     };
   }
 
@@ -55,18 +57,25 @@ class GuardTask extends Task {
   }
 
   _tick(ctx) {
+    const target = this._target(ctx);
     if (ctx.shadow) {
-      const target = this._target(ctx);
       this.markShadowPlan(ctx, {
         radius: this.settings.radius,
         target: target ? target.name : null,
       });
       return;
     }
-    if (this.pending) return;
-    const target = this._target(ctx);
+    if (this.pending) {
+      if (target && this.pending.label === 'guard_patrol') {
+        skills.combat.stopCombat(ctx.bot);
+        this.pending = null;
+      } else {
+        return;
+      }
+    }
     if (!target) {
       skills.combat.stopCombat(ctx.bot);
+      this._patrol(ctx);
       return;
     }
 
@@ -108,6 +117,27 @@ class GuardTask extends Task {
         }));
       }
     }
+  }
+
+  _patrol(ctx) {
+    const now = Number(ctx.now);
+    if (!Number.isFinite(now) || now - this._lastPatrolAt < PATROL_INTERVAL_MS) return;
+    this._lastPatrolAt = now;
+    const spot = skills.world.findSafeSpot(ctx.bot, {
+      searchRadius: 6,
+      preferredDistance: 5,
+      threats: [],
+    });
+    if (!spot) return;
+    this.runPending('guard_patrol', () => skills.move.moveTo(ctx.bot, spot, {
+      range: 1,
+      timeoutMs: 5000,
+    }));
+  }
+
+  onPendingError(ctx, error, label) {
+    if (label === 'guard_patrol') return;
+    super.onPendingError(ctx, error);
   }
 
   onFinish(ctx) {

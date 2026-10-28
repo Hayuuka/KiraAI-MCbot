@@ -22,7 +22,7 @@ class IdleTask extends Task {
     return {
       args: { durationMs, look: true },
       etaSec: Math.ceil(durationMs / 1000),
-      note: '原地待命',
+      note: '原地等一会儿后重新评估（不是长时间待命）',
     };
   }
 
